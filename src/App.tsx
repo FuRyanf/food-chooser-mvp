@@ -197,7 +197,7 @@ export default function App() {
         <div>
           <div className="flex items-center gap-2">
             <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">Food Chooser</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
           </div>
           <p className="text-sm text-zinc-600">Smart, fun dinner picks — personalized by mood, budget, and weather.</p>
         </div>
