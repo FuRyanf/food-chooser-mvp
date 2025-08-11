@@ -1,4 +1,4 @@
-# Food Chooser MVP
+# FuDi
 
 A fun and interactive meal recommendation app built with **React**, **TypeScript**, **Tailwind CSS**, and **Framer Motion**.  
 Includes a “Gacha Egg” animation inspired by Puzzles & Dragons — crack open the egg to reveal your dinner surprise.
