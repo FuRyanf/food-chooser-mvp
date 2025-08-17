@@ -2,17 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { DollarSign, Egg, Filter, History, Sparkles } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import EggGacha from "./components/EggGacha";
+import { FoodChooserAPI } from './lib/api';
+import type { Database } from './lib/supabase';
 
-type Meal = {
-  id: string;
-  date: string;
-  restaurant?: string;
-  dish: string;
-  cuisine: string;
-  cost: number;
-  rating?: number;
-  notes?: string;
-};
+type Meal = Database['public']['Tables']['meals']['Row'];
 type Weather = { condition: 'hot'|'cold'|'mild'|'rain'; tempF: number };
 type Budget = { min: number; max: number };
 type EggTier = 'Bronze'|'Silver'|'Gold'|'Diamond';
@@ -29,12 +22,6 @@ type Recommendation = {
 // NEW: overrides map (cuisine -> count)
 type Overrides = Record<string, number>;
 
-const LS = {
-  MEALS: 'foodchooser.meals.v1',
-  BUDGET: 'foodchooser.budget.v1',
-  OVERRIDES: 'foodchooser.overrides.v1',      // NEW
-} as const;
-
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const uid = ()=> Math.random().toString(36).slice(2,10);
@@ -46,12 +33,12 @@ function pseudoWeatherForDate(iso:string): Weather {
 }
 function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
 
-const seedMeals: Meal[] = [
-  { id: uid(), date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4 },
-  { id: uid(), date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5 },
-  { id: uid(), date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4 },
-  { id: uid(), date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3 },
-  { id: uid(), date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5 },
+const seedMeals: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
+  { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null },
+  { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null },
+  { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null },
+  { date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3, notes: null },
+  { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null },
 ];
 
 // UPDATED: add overrides param and bonus to the score
@@ -89,7 +76,7 @@ function buildRecommendations(
     recs.push({
       key: cuisine,
       label: cuisine,
-      suggestedRestaurant: sorted[0]?.restaurant,
+      suggestedRestaurant: sorted[0]?.restaurant ?? undefined,
       dish: sorted[0]?.dish,
       estCost: Math.round(avgCost*100)/100,
       score,
@@ -109,18 +96,57 @@ export default function App() {
   const [picked, setPicked] = useState<Recommendation | undefined>();
   const [overrides, setOverrides] = useState<Overrides>({});     // NEW
   const [isOverride, setIsOverride] = useState(false);           // NEW: did user manually choose?
+  
+  // NEW: Loading and error states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Load data from Supabase on component mount
   useEffect(()=>{ 
-    const m=localStorage.getItem(LS.MEALS);
-    const b=localStorage.getItem(LS.BUDGET);
-    const o=localStorage.getItem(LS.OVERRIDES);                  // NEW
-    if (m) setMeals(JSON.parse(m));
-    if (b) setBudget(JSON.parse(b));
-    if (o) setOverrides(JSON.parse(o));                          // NEW
+    loadData();
   }, []);
-  useEffect(()=>{ localStorage.setItem(LS.MEALS, JSON.stringify(meals)); }, [meals]);
-  useEffect(()=>{ localStorage.setItem(LS.BUDGET, JSON.stringify(budget)); }, [budget]);
-  useEffect(()=>{ localStorage.setItem(LS.OVERRIDES, JSON.stringify(overrides)); }, [overrides]); // NEW
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load meals, preferences, and overrides in parallel
+      const [mealsData, prefsData, overridesData] = await Promise.all([
+        FoodChooserAPI.getMeals(),
+        FoodChooserAPI.getUserPreferences(),
+        FoodChooserAPI.getOverridesMap()
+      ]);
+
+      setMeals(mealsData);
+      if (prefsData) {
+        setBudget({ min: prefsData.budget_min, max: prefsData.budget_max });
+        setForbidRepeatDays(prefsData.forbid_repeat_days);
+        setStrictBudget(prefsData.strict_budget);
+      }
+      setOverrides(overridesData);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Save preferences to Supabase whenever they change
+  useEffect(() => {
+    if (!loading) {
+      FoodChooserAPI.upsertUserPreferences({
+        budget_min: budget.min,
+        budget_max: budget.max,
+        forbid_repeat_days: forbidRepeatDays,
+        strict_budget: strictBudget
+      }).catch(err => {
+        console.error('Error saving preferences:', err);
+        setError('Failed to save preferences');
+      });
+    }
+  }, [budget, forbidRepeatDays, strictBudget, loading]);
 
   const cuisines = useMemo(()=> [...new Set(meals.map(m=>m.cuisine))], [meals]);
   const wx = pseudoWeatherForDate(todayISO());
@@ -143,9 +169,40 @@ export default function App() {
     return days;
   }, [meals]);
 
-  function seedDemo(){ setMeals(prev => [...prev, ...seedMeals].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
-  function addMeal(m:Meal){ setMeals(prev => [m, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
-  function deleteMeal(id:string){ setMeals(prev => prev.filter(m=> m.id!==id)); }
+  async function seedDemo(){ 
+    try {
+      setError(null);
+      for (const meal of seedMeals) {
+        await FoodChooserAPI.addMeal(meal);
+      }
+      await loadData(); // Reload data to show new meals
+    } catch (err) {
+      console.error('Error seeding demo data:', err);
+      setError('Failed to load demo data');
+    }
+  }
+
+  async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){ 
+    try {
+      setError(null);
+      const newMeal = await FoodChooserAPI.addMeal(mealData);
+      setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
+    } catch (err) {
+      console.error('Error adding meal:', err);
+      setError('Failed to add meal');
+    }
+  }
+
+  async function deleteMeal(id:string){ 
+    try {
+      setError(null);
+      await FoodChooserAPI.deleteMeal(id);
+      setMeals(prev => prev.filter(m=> m.id!==id));
+    } catch (err) {
+      console.error('Error deleting meal:', err);
+      setError('Failed to delete meal');
+    }
+  }
 
   // UPDATED: crack egg via algorithmic pick (not override)
   function crackEgg(){
@@ -167,28 +224,76 @@ export default function App() {
   const [rating, setRating] = useState(4);
   const [notes, setNotes] = useState('');
 
-  function submitMeal(){
-    const meal: Meal = { id: uid(), date: new Date(date).toISOString(), restaurant: restaurant || undefined, dish: dish || "Chef's choice", cuisine: cuisineInput, cost: Math.max(0, Number(cost) || 0), rating, notes: notes || undefined };
-    addMeal(meal);
+  async function submitMeal(){
+    const mealData = { 
+      date: new Date(date).toISOString(), 
+      restaurant: restaurant || null, 
+      dish: dish || "Chef's choice", 
+      cuisine: cuisineInput, 
+      cost: Math.max(0, Number(cost) || 0), 
+      rating, 
+      notes: notes || null 
+    };
+    await addMeal(mealData);
     setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes('');
   }
 
   // NEW: when user confirms in gacha, save to history and apply override boost if needed
-  function handleOrder(rec: Recommendation) {
-    const meal: Meal = {
-      id: uid(),
-      date: new Date().toISOString(),
-      restaurant: rec.suggestedRestaurant,
-      dish: rec.dish ?? rec.label,
-      cuisine: rec.label,
-      cost: rec.estCost,
-    };
-    addMeal(meal);
+  async function handleOrder(rec: Recommendation) {
+    try {
+      setError(null);
+      const mealData = {
+        date: new Date().toISOString(),
+        restaurant: rec.suggestedRestaurant || null,
+        dish: rec.dish ?? rec.label,
+        cuisine: rec.label,
+        cost: rec.estCost,
+        rating: null,
+        notes: null
+      };
+      await addMeal(mealData);
 
-    if (isOverride) {
-      setOverrides(prev => ({ ...prev, [rec.label]: (prev[rec.label] ?? 0) + 1 }));
+      if (isOverride) {
+        const newCount = (overrides[rec.label] ?? 0) + 1;
+        await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount);
+        setOverrides(prev => ({ ...prev, [rec.label]: newCount }));
+      }
+      setIsOverride(false);
+    } catch (err) {
+      console.error('Error handling order:', err);
+      setError('Failed to save meal');
     }
-    setIsOverride(false);
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Loading your food data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <div className="card p-8 text-center">
+          <div className="text-red-600 mb-4">Error: {error}</div>
+          <button 
+            className="btn-primary" 
+            onClick={() => {
+              setError(null);
+              loadData();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -232,7 +337,7 @@ export default function App() {
         </div>
 
         <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Today’s Context</div>
+          <div className="text-sm font-semibold mb-1">Today's Context</div>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <div className="label">Condition</div>
@@ -394,7 +499,7 @@ export default function App() {
         confirmLabel={isOverride ? "Choose & Save" : "Save to Dinner History"}
       />
 
-      <footer className="pb-8 pt-2 text-center text-xs text-zinc-500">Built for MVP demo • Data saved to your browser (localStorage)</footer>
+      <footer className="pb-8 pt-2 text-center text-xs text-zinc-500">Built for MVP demo • Data saved to Supabase database</footer>
     </div>
   );
 }
