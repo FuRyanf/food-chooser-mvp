@@ -15,10 +15,19 @@ type CuisineOverrideInsert = Database['public']['Tables']['cuisine_overrides']['
 // For now, we'll use a simple user ID. In a real app, you'd implement proper auth
 const DEMO_USER_ID = 'demo-user-123'
 
+// Helper function to check if Supabase is configured
+function checkSupabase() {
+  if (!supabase) {
+    throw new Error('Supabase not configured. Please set up your .env.local file with Supabase credentials.')
+  }
+}
+
 export class FoodChooserAPI {
   // Meals
   static async getMeals(): Promise<Meal[]> {
-    const { data, error } = await supabase
+    checkSupabase()
+    
+    const { data, error } = await supabase!
       .from('meals')
       .select('*')
       .eq('user_id', DEMO_USER_ID)
@@ -33,6 +42,8 @@ export class FoodChooserAPI {
   }
 
   static async addMeal(meal: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>): Promise<Meal> {
+    checkSupabase()
+    
     const now = new Date().toISOString()
     const mealData: MealInsert = {
       ...meal,
@@ -41,7 +52,7 @@ export class FoodChooserAPI {
       updated_at: now
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from('meals')
       .insert(mealData)
       .select()
@@ -56,7 +67,9 @@ export class FoodChooserAPI {
   }
 
   static async updateMeal(id: string, updates: Partial<MealUpdate>): Promise<Meal> {
-    const { data, error } = await supabase
+    checkSupabase()
+    
+    const { data, error } = await supabase!
       .from('meals')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -73,7 +86,9 @@ export class FoodChooserAPI {
   }
 
   static async deleteMeal(id: string): Promise<void> {
-    const { error } = await supabase
+    checkSupabase()
+    
+    const { error } = await supabase!
       .from('meals')
       .delete()
       .eq('id', id)
@@ -87,7 +102,9 @@ export class FoodChooserAPI {
 
   // User Preferences
   static async getUserPreferences(): Promise<UserPreferences | null> {
-    const { data, error } = await supabase
+    checkSupabase()
+    
+    const { data, error } = await supabase!
       .from('user_preferences')
       .select('*')
       .eq('user_id', DEMO_USER_ID)
@@ -102,6 +119,8 @@ export class FoodChooserAPI {
   }
 
   static async upsertUserPreferences(prefs: Omit<UserPreferencesInsert, 'user_id' | 'created_at' | 'updated_at'>): Promise<UserPreferences> {
+    checkSupabase()
+    
     const now = new Date().toISOString()
     const prefsData: UserPreferencesInsert = {
       ...prefs,
@@ -110,7 +129,7 @@ export class FoodChooserAPI {
       updated_at: now
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from('user_preferences')
       .upsert(prefsData, { onConflict: 'user_id' })
       .select()
@@ -126,7 +145,9 @@ export class FoodChooserAPI {
 
   // Cuisine Overrides
   static async getCuisineOverrides(): Promise<CuisineOverride[]> {
-    const { data, error } = await supabase
+    checkSupabase()
+    
+    const { data, error } = await supabase!
       .from('cuisine_overrides')
       .select('*')
       .eq('user_id', DEMO_USER_ID)
@@ -140,6 +161,8 @@ export class FoodChooserAPI {
   }
 
   static async upsertCuisineOverride(cuisine: string, count: number): Promise<CuisineOverride> {
+    checkSupabase()
+    
     const now = new Date().toISOString()
     const overrideData: CuisineOverrideInsert = {
       user_id: DEMO_USER_ID,
@@ -149,7 +172,7 @@ export class FoodChooserAPI {
       updated_at: now
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabase!
       .from('cuisine_overrides')
       .upsert(overrideData, { onConflict: 'user_id,cuisine' })
       .select()
@@ -165,6 +188,8 @@ export class FoodChooserAPI {
 
   // Helper method to get overrides as a Record
   static async getOverridesMap(): Promise<Record<string, number>> {
+    checkSupabase()
+    
     const overrides = await this.getCuisineOverrides()
     return overrides.reduce((acc, override) => {
       acc[override.cuisine] = override.count
