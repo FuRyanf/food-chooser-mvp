@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
+import { createPortal } from 'react-dom';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type Weather = { condition: 'hot'|'cold'|'mild'|'rain'; tempF: number };
@@ -24,10 +25,47 @@ type Overrides = Record<string, number>;
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const daysSince = (iso:string)=> Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000));
-function pseudoWeatherForDate(iso:string): Weather {
-  const d = new Date(iso); const seed = (d.getMonth()+1)*37 + d.getDate()*17; const tempF = 50 + (seed % 50);
-  let condition: Weather['condition'] = 'mild'; if (tempF>=85) condition='hot'; else if (tempF<=58) condition='cold'; if (seed%7===0) condition='rain';
-  return { condition, tempF };
+// Precise weather: we will fetch current weather from Open-Meteo using geolocation.
+function mapWeatherCodeToCondition(code: number, tempF: number): Weather['condition'] {
+  const rainyCodes = new Set<number>([
+    51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99
+  ]);
+  if (rainyCodes.has(code)) return 'rain';
+  if (tempF >= 85) return 'hot';
+  if (tempF <= 58) return 'cold';
+  return 'mild';
+}
+async function fetchWeather(lat:number, lon:number): Promise<Weather>{
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const t = Number(data?.current_weather?.temperature ?? 70);
+  const code = Number(data?.current_weather?.weathercode ?? 0);
+  const condition = mapWeatherCodeToCondition(code, t);
+  return { condition, tempF: t };
+}
+async function reverseGeocode(lat:number, lon:number): Promise<string | null> {
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=en&format=json`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const first = data?.results?.[0];
+    if (!first) return null;
+    // Prefer just the city/locality name
+    return first.name || null;
+  } catch { return null; }
+}
+async function ipCityFallback(): Promise<string | null> {
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    const data = await res.json();
+    const city = data?.city as string | undefined;
+    return city ?? null;
+  } catch { return null; }
+}
+function pseudoWeatherFallback(): Weather {
+  const t = 72;
+  return { condition: 'mild', tempF: t };
 }
 function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
 
@@ -44,7 +82,8 @@ function buildRecommendations(
   budget: Budget,
   forbidRepeatDays = 1,
   overrides: Overrides = {},
-  enforceNoRepeat = true
+  enforceNoRepeat = true,
+  weather: Weather
 ) {
   if (!meals.length) return [] as Recommendation[];
   const byCuisine = new Map<string, Meal[]>();
@@ -61,7 +100,7 @@ function buildRecommendations(
     const recencyPenalty = Math.max(-8, -1 * (6 - Math.min(6, lastDays)));
     const within = lastCost >= budget.min && lastCost <= budget.max;
     const budgetFit = within ? 12 : -Math.min(Math.abs(lastCost - (lastCost < budget.min ? budget.min : budget.max))/5, 10);
-    const todayWx = pseudoWeatherForDate(todayISO());
+    const todayWx = weather;
     let weatherBonus = 0;
     if (todayWx.condition==='hot' && ['Japanese','Salad','Mexican'].includes(cuisine)) weatherBonus += 3;
     if (todayWx.condition==='cold' && ['Ramen','Indian','Italian'].includes(cuisine)) weatherBonus += 4;
@@ -125,15 +164,12 @@ export default function App() {
   const [isOverride, setIsOverride] = useState(false);
 
   // Tabs: Home (default) and Browse (right)
-  const [activeTab, setActiveTab] = useState<'home'|'browse'>('home');
+  const [activeTab, setActiveTab] = useState<'home'|'browse'|'how'>('home');
   const [browseSearch, setBrowseSearch] = useState('');
   const [orderOpen, setOrderOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [scoreHelpOpen, setScoreHelpOpen] = useState(false);
   const [scoreHelpText, setScoreHelpText] = useState<string>('');
-
-  // Browse detail modal key
-  const [browseDetailKey, setBrowseDetailKey] = useState<string | null>(null);
 
   // Edit history modal
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
@@ -287,13 +323,53 @@ export default function App() {
   }
 
   const cuisines = useMemo(()=> [...new Set(meals.map(m=>m.cuisine))], [meals]);
-  const wx = pseudoWeatherForDate(todayISO());
-  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat), [meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat]);
+  const [wx, setWx] = useState<Weather>(pseudoWeatherFallback());
+  const [locationName, setLocationName] = useState<string>('');
+  useEffect(() => {
+    const fallback = async () => {
+      const lat = 37.7749, lon = -122.4194;
+      try { const w = await fetchWeather(lat, lon); setWx(w); } catch { setWx(pseudoWeatherFallback()); }
+      try {
+        const name = await reverseGeocode(lat, lon);
+        if (name) setLocationName(name);
+        else {
+          const ipCity = await ipCityFallback();
+          setLocationName(ipCity ?? 'San Francisco');
+        }
+      } catch {
+        const ipCity = await ipCityFallback();
+        setLocationName(ipCity ?? 'San Francisco');
+      }
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos)=>{
+          try { const w = await fetchWeather(pos.coords.latitude, pos.coords.longitude); setWx(w); } 
+          catch { fallback(); }
+          try {
+            const name = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+            if (name) setLocationName(name);
+            else {
+              const ipCity = await ipCityFallback();
+              setLocationName(ipCity ?? 'City unavailable');
+            }
+          } catch {
+            const ipCity = await ipCityFallback();
+            setLocationName(ipCity ?? 'City unavailable');
+          }
+        },
+        ()=> fallback(),
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else { fallback(); }
+  }, []);
+  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat, wx), [meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat, wx]);
   const filteredRecs = recs.filter(r=> r.label.toLowerCase().includes(search.toLowerCase()));
 
-  const totalSpend30d = useMemo(()=>{
-    const now=Date.now();
-    return meals.filter(m=> now - new Date(m.date).getTime() <= 30*86400000).reduce((s,m)=> s+m.cost, 0);
+  function monthKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+  const totalSpendCurrentMonth = useMemo(()=>{
+    const nowKey = monthKey(new Date());
+    return meals.filter(m=> monthKey(new Date(m.date))===nowKey).reduce((s,m)=> s+m.cost, 0);
   }, [meals]);
   function totalSpendMonth(){
     const d = new Date();
@@ -352,6 +428,20 @@ export default function App() {
       notes: null
     });
     showToast('Logged to Meal History');
+  }
+
+  // Select from Top choices: behave like Browse.Select (no egg; add to history directly)
+  async function selectFromTopChoice(m: Meal){
+    await addMeal({
+      date: new Date().toISOString(),
+      restaurant: m.restaurant,
+      dish: m.dish,
+      cuisine: m.cuisine,
+      cost: m.cost,
+      rating: m.rating ?? null,
+      notes: m.notes ?? null,
+    });
+    showToast('Selected! Added to your Meal History.');
   }
   async function selectBrowseEntry(key: string){
     await addBrowseEntryToHistory(key);
@@ -497,8 +587,6 @@ export default function App() {
     setScoreHelpText(lines.join('\n'));
     setScoreHelpOpen(true);
   }
-
-  // Browse detail modal removed
 
   // Browse: add latest entry to dinner history
   async function addBrowseEntryToHistory(key: string) {
@@ -682,6 +770,7 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-2">
           <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
           <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
+          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
           <button className="btn-outline" onClick={seedDemo}><History className="h-4 w-4"/> Load Demo Data</button>
           <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
@@ -710,33 +799,6 @@ export default function App() {
                   );
                 })}
               </div>
-              <div className="mt-3 text-xs text-zinc-600">
-                Tip: These checkboxes only filter what you see. Use the actions below to disable/enable all dishes in the selected cuisines from being recommended.
-              </div>
-              <div className="mt-2 flex flex-col gap-2">
-                <button
-                  className="btn-ghost"
-                  title="Disable all dishes that belong to the checked cuisines"
-                  onClick={()=> {
-                    const selected = Object.entries(cuisineFilter).filter(([,on])=> on !== false).map(([k])=> k);
-                    setDisabledForCuisine(selected, true);
-                  }}
-                  disabled={cuisineBatchSaving}
-                >
-                  {cuisineBatchSaving ? 'Working…' : 'Disable all selected cuisines'}
-                </button>
-                <button
-                  className="btn-ghost"
-                  title="Enable all dishes that belong to the checked cuisines"
-                  onClick={()=> {
-                    const selected = Object.entries(cuisineFilter).filter(([,on])=> on !== false).map(([k])=> k);
-                    setDisabledForCuisine(selected, false);
-                  }}
-                  disabled={cuisineBatchSaving}
-                >
-                  {cuisineBatchSaving ? 'Working…' : 'Enable all selected cuisines'}
-                </button>
-              </div>
             </div>
             {/* Items */}
             <div className="md:col-span-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -755,7 +817,6 @@ export default function App() {
                 <div className="text-sm text-zinc-600">{displayTitle(e.latest.restaurant)} • {displayTitle(e.latest.cuisine, '—')}</div>
                 <div className="text-sm text-zinc-600">Latest: {currency(e.latest.cost)} • {new Date(e.latest.date).toISOString().slice(0,10)}</div>
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  <button className="btn-ghost" onClick={()=> setBrowseDetailKey(e.key)}>View price history</button>
                   <button className="btn-primary" onClick={()=> selectBrowseEntry(e.key)}>Select</button>
                   <button
                     className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100' : 'hover:bg-zinc-50'}`}
@@ -771,7 +832,7 @@ export default function App() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab==='home' ? (
         <>
       {/* Controls */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -830,11 +891,15 @@ export default function App() {
         <div className="card p-5">
               <div className="text-sm font-semibold mb-1">Today's Context</div>
           <div className="grid grid-cols-3 gap-4 text-sm">
-                <div><div className="label">Condition</div><div className="text-lg font-semibold capitalize">{wx.condition}</div></div>
+            <div>
+              <div className="label">Condition</div>
+                  <div className="text-lg font-semibold capitalize flex items-center gap-1">{weatherIcon(wx.condition)} <span>{wx.condition}</span></div>
+                  <div className="text-xs text-zinc-600">{locationName || 'Location unavailable'}</div>
+            </div>
                 <div><div className="label">Temp</div><div className="text-lg font-semibold">{wx.tempF}°F</div></div>
             <div>
-              <div className="label">30d Spend</div>
-                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendMode('daily'); setSpendSelection(null); setSpendOpen(true); }}>{currency(totalSpend30d)}</button>
+              <div className="label">Month-to-date Spend</div>
+                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendMode('monthly'); setSpendSelection(monthKey(new Date())); setSpendOpen(true); }}>{currency(totalSpendCurrentMonth)}</button>
             </div>
           </div>
           <div className="mt-4 h-[120px]">
@@ -849,9 +914,9 @@ export default function App() {
                   {!monthlyBudgetEdit && (
                     <button className="btn-ghost" onClick={()=> { setMonthlyBudgetEdit(true); }}>Edit</button>
                   )}
-                </div>
+        </div>
                 {monthlyBudgetEdit ? (
-                  <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2">
                     <input className="input w-32" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e=> setMonthlyBudgetDraft(e.target.value)} />
                     <button className="btn-primary" onClick={async ()=> { setPrefsError(null); setPrefsSavedNotice(null); await savePreferences(); setMonthlyBudgetEdit(false); }}>Save</button>
                     <button className="btn-ghost" onClick={()=> { setMonthlyBudgetDraft(monthlyBudgetSaved != null ? String(monthlyBudgetSaved) : ''); setMonthlyBudgetEdit(false); }}>Cancel</button>
@@ -885,7 +950,7 @@ export default function App() {
                     );
                   })()
                 )}
-              </div>
+          </div>
         </div>
 
         {/* Quick Filters removed as redundant with Browse */}
@@ -948,8 +1013,7 @@ export default function App() {
                       <div className="text-xs text-zinc-600">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
                     </div>
                     <div className="flex gap-2">
-                      <button className="btn-ghost" title="Log immediately to meal history" onClick={()=> logFromMeal(s.meal)}>Log</button>
-                      <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: s.meal.id, label: displayTitle(s.meal.cuisine, '—'), suggestedRestaurant: displayTitle(s.meal.restaurant, undefined as any), dish: displayTitle(s.meal.dish), estCost: s.meal.cost, score: 0, tier: deriveTier(s.meal.cost) }); setEggOpen(true); }}>Select</button>
+                      <button className="btn-primary" onClick={()=> selectFromTopChoice(s.meal)}>Select</button>
                     </div>
                   </div>
                 ))}
@@ -970,61 +1034,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Browse price history modal */}
-      {browseDetailKey && (() => {
-        const entry = browseEntries.find((e) => e.key === browseDetailKey)!;
-        const chart = entry.history.map((h) => ({ date: new Date(h.date).toISOString().slice(0,10), price: h.cost }));
-        return (
-          <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setBrowseDetailKey(null)}>
-            <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-lg font-semibold">{displayTitle(entry.latest.dish)}</div>
-                <div className="text-sm text-zinc-600">{displayTitle(entry.latest.restaurant)} • {displayTitle(entry.latest.cuisine, '—')}</div>
-              </div>
-              <div className="text-sm">Latest price: <span className="font-semibold">{currency(entry.latest.cost)}</span></div>
-              <div className="mt-3 h-[160px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chart}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis domain={['auto','auto']} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="price" strokeWidth={2} dot={true} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button className="btn-ghost" onClick={()=> setBrowseDetailKey(null)}>Close</button>
-                <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); setBrowseDetailKey(null); }}>Add to Meal History</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Meal History (Home only) */}
       {activeTab === 'home' && (
-        <div className="card p-5">
+      <div className="card p-5">
           <div className="flex items-center justify-between"><div className="text-sm font-semibold">Meal History</div><button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button></div>
-          <div className="overflow-x-auto">
-            <table className="table">
+        <div className="overflow-x-auto">
+          <table className="table">
               <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Cuisine</th><th className="th text-left">Restaurant</th><th className="th text-left">Dish</th><th className="th text-right">Cost</th><th className="th text-center">Rating</th><th className="th text-center">Actions</th></tr></thead>
-              <tbody>
+            <tbody>
                 {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
-                  <tr key={m.id} className="hover:bg-zinc-50">
-                    <td className="td">{m.date.slice(0,10)}</td>
+                <tr key={m.id} className="hover:bg-zinc-50">
+                  <td className="td">{m.date.slice(0,10)}</td>
                     <td className="td">{displayTitle(m.cuisine, '—')}</td>
                     <td className="td">{displayTitle(m.restaurant, '—')}</td>
                     <td className="td">{displayTitle(m.dish)}</td>
-                    <td className="td text-right">{currency(m.cost)}</td>
-                    <td className="td text-center">{m.rating ?? '—'}</td>
+                  <td className="td text-right">{currency(m.cost)}</td>
+                  <td className="td text-center">{m.rating ?? '—'}</td>
                     <td className="td text-center"><button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button><button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
       )}
 
       {/* Edit history modal */}
@@ -1120,6 +1152,45 @@ export default function App() {
       })()}
 
       </>
+      ) : (
+        <div className="card p-5">
+          <div className="text-sm font-semibold mb-2">How the ranking works</div>
+          <div className="space-y-3 text-sm">
+            <div>
+              The score for each meal uses this formula:
+              <ul className="ml-5 list-disc">
+                <li>Rating weight: (rating or 3) × 10</li>
+                <li>Recency penalty: up to −12 for very recent meals</li>
+                <li>Budget fit: +8 if within your saved budget; negative if outside</li>
+                <li>Weather bonus: +2 to +3 for cuisines matching today's weather</li>
+                <li>Random jitter: small ±1.5 to add variety</li>
+              </ul>
+            </div>
+            <div className="rounded border p-3">
+              <div className="font-semibold mb-1">Today's context</div>
+              <div>Weather: {wx.condition} • {wx.tempF}°F • Budget: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
+            </div>
+            <div>
+              <div className="font-semibold mb-1">Examples</div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {rankedMeals.slice(0,2).map(s => (
+                  <div key={s.meal.id} className="rounded border p-3">
+                    <div className="font-medium">{displayTitle(s.meal.dish)} • {displayTitle(s.meal.cuisine,'—')}</div>
+                    <div className="text-xs text-zinc-600 mb-2">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}</div>
+                    <ul className="ml-5 list-disc text-xs">
+                      <li>Rating weight: {Math.round((s.breakdown.ratingWeight)*10)/10}</li>
+                      <li>Recency penalty: {Math.round((s.breakdown.recencyPenalty)*10)/10}</li>
+                      <li>Budget fit: {Math.round((s.breakdown.budgetFit)*10)/10}</li>
+                      <li>Weather bonus: {Math.round((s.breakdown.weatherBonus)*10)/10}</li>
+                      <li>Jitter: {Math.round((s.breakdown.jitter)*10)/10}</li>
+                    </ul>
+                    <div className="mt-1 text-xs">Total score: <span className="font-semibold">{Math.round((s.breakdown.total)*10)/10}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Meal History"} />
@@ -1135,4 +1206,13 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function weatherIcon(cond: Weather['condition']): string {
+  switch (cond) {
+    case 'hot': return '☀️';
+    case 'rain': return '🌧️';
+    case 'cold': return '❄️';
+    default: return '⛅';
+  }
 }
