@@ -1,10 +1,8 @@
--- Simplified Food Chooser MVP Database Schema
--- This version removes complex RLS policies to get basic functionality working
+-- Food Chooser MVP Database Schema
+-- Run this in your Supabase SQL editor
 
--- Drop old tables if they exist (clean reset)
-DROP TABLE IF EXISTS public.meals CASCADE;
-DROP TABLE IF EXISTS public.user_preferences CASCADE;
-DROP TABLE IF EXISTS public.cuisine_overrides CASCADE;
+-- Enable Row Level Security (RLS)
+-- ALTER DATABASE postgres SET "app.jwt_secret" TO 'your-jwt-secret-here';
 
 -- Create tables
 CREATE TABLE IF NOT EXISTS public.meals (
@@ -68,16 +66,34 @@ CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON public.user_p
 CREATE TRIGGER update_cuisine_overrides_updated_at BEFORE UPDATE ON public.cuisine_overrides
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Enable Row Level Security
+ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cuisine_overrides ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies
+-- For now, we'll allow all operations for the demo user
+-- In production, you'd implement proper authentication
+
+-- Meals policies
+CREATE POLICY "Allow all operations for demo user" ON public.meals
+    FOR ALL USING (user_id = 'demo-user-123');
+
+-- User preferences policies
+CREATE POLICY "Allow all operations for demo user" ON public.user_preferences
+    FOR ALL USING (user_id = 'demo-user-123');
+
+-- Cuisine overrides policies
+CREATE POLICY "Allow all operations for demo user" ON public.cuisine_overrides
+    FOR ALL USING (user_id = 'demo-user-123');
+
 -- Insert some sample data for the demo user
 INSERT INTO public.user_preferences (user_id, budget_min, budget_max, forbid_repeat_days, strict_budget)
 VALUES ('demo-user-123', 10.00, 35.00, 1, false)
 ON CONFLICT (user_id) DO NOTHING;
 
--- Grant necessary permissions (simplified)
+-- Grant necessary permissions
 GRANT ALL ON public.meals TO anon, authenticated;
 GRANT ALL ON public.user_preferences TO anon, authenticated;
 GRANT ALL ON public.cuisine_overrides TO anon, authenticated;
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
-
--- Note: RLS is disabled for now to get basic functionality working
--- You can enable it later once everything is working
