@@ -180,7 +180,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                               onClose();
                             }}
                           >
-                            {confirmLabel ?? "Save to Dinner History"}
+                            {confirmLabel ?? "Save to Meal History"}
                           </button>
                         </div>
                       </div>

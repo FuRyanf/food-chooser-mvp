@@ -1,14 +1,14 @@
 # FuDi
 
 A fun and interactive meal recommendation app built with **React**, **TypeScript**, **Tailwind CSS**, and **Framer Motion**.  
-Includes a “Gacha Egg” animation inspired by Puzzles & Dragons — crack open the egg to reveal your dinner surprise.
+Includes a “Gacha Egg” animation inspired by Puzzles & Dragons — crack open the egg to reveal your meal surprise.
 
 ## Features
 
 - Gacha Egg Animation – Rolling, bouncing, and cracking animation before revealing a meal pick.
 - Weighted Random Selection – Picks meals based on configurable score weighting.
 - Surprise Me – Let the algorithm choose for you, or override manually.
-- Dinner History – Tracks past chosen meals.
+- Meal History – Tracks past chosen meals.
 - Responsive UI – Works well on desktop and mobile.
 - Tier-based Egg Designs – Bronze, Silver, Gold, Diamond with confetti.
 
@@ -48,7 +48,7 @@ food-chooser-mvp/
 ├── src/
 │   ├── components/
 │   │   ├── EggGacha.tsx   # Gacha animation component
-│   │   ├── DinnerHistory.tsx
+│   │   ├── MealHistory.tsx
 │   │   └── ...
 │   ├── App.tsx            # Main app logic
 │   └── ...

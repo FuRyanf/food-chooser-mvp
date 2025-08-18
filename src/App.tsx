@@ -177,6 +177,12 @@ export default function App() {
   const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
   const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
+  // Toast feedback
+  const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
+  function showToast(message: string, durationMs = 2200) {
+    setToast({ show: true, message });
+    window.setTimeout(() => setToast({ show: false, message: '' }), durationMs);
+  }
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +326,36 @@ export default function App() {
   async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){
     try { const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
     catch (err) { setError('Failed to add meal'); }
+  }
+
+  // Helpers to log meals quickly from UI
+  async function logFromMeal(m: Meal){
+    await addMeal({
+      date: new Date().toISOString(),
+      restaurant: m.restaurant,
+      dish: m.dish,
+      cuisine: m.cuisine,
+      cost: m.cost,
+      rating: m.rating ?? null,
+      notes: m.notes ?? null
+    });
+    showToast('Logged to Meal History');
+  }
+  async function logFromRec(r: Recommendation){
+    await addMeal({
+      date: new Date().toISOString(),
+      restaurant: r.suggestedRestaurant ? titleCase(r.suggestedRestaurant) : null,
+      dish: r.dish ? titleCase(r.dish) : titleCase(r.label),
+      cuisine: titleCase(r.label),
+      cost: r.estCost,
+      rating: null,
+      notes: null
+    });
+    showToast('Logged to Meal History');
+  }
+  async function selectBrowseEntry(key: string){
+    await addBrowseEntryToHistory(key);
+    showToast('Selected! Added to your Meal History.');
   }
 
   // Weighted random selection among top options
@@ -641,7 +677,7 @@ export default function App() {
             <Sparkles className="h-6 w-6" />
             <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
           </div>
-          <p className="text-sm text-zinc-600">Smart, fun dinner picks — personalized by mood, budget, and weather.</p>
+          <p className="text-sm text-zinc-600">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
@@ -720,7 +756,7 @@ export default function App() {
                 <div className="text-sm text-zinc-600">Latest: {currency(e.latest.cost)} • {new Date(e.latest.date).toISOString().slice(0,10)}</div>
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <button className="btn-ghost" onClick={()=> setBrowseDetailKey(e.key)}>View price history</button>
-                  <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: e.key, label: displayTitle(e.latest.cuisine, '—'), suggestedRestaurant: displayTitle(e.latest.restaurant, undefined as any), dish: displayTitle(e.latest.dish), estCost: e.latest.cost, score: 0, tier: deriveTier(e.latest.cost) }); setEggOpen(true); }}>Select</button>
+                  <button className="btn-primary" onClick={()=> selectBrowseEntry(e.key)}>Select</button>
                   <button
                     className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100' : 'hover:bg-zinc-50'}`}
                     onClick={()=> toggleDisabledKey(normKey)}
@@ -738,7 +774,7 @@ export default function App() {
       ) : (
         <>
       {/* Controls */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="card p-5">
           <div className="text-sm font-semibold mb-1">Budget</div>
           <div className="grid grid-cols-2 gap-3 mb-3">
@@ -852,17 +888,12 @@ export default function App() {
               </div>
         </div>
 
-        <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Quick Filters</div>
-          <div className="label">Search cuisines</div>
-              <div className="mt-1 flex items-center gap-2"><input className="input" placeholder="e.g., Mexican, Ramen…" value={search} onChange={e=> setSearch(e.target.value)} /><button className="btn-ghost" onClick={()=> setSearch('')}><Filter className="h-4 w-4"/></button></div>
-          <p className="mt-2 text-xs text-zinc-600">Tip: Load demo data, tweak budget, then crack the egg.</p>
-        </div>
+        {/* Quick Filters removed as redundant with Browse */}
       </div>
 
-          {/* Log a Dinner */}
+          {/* Log a Meal */}
       <div className="card p-5">
-        <div className="text-sm font-semibold mb-3">Log a Dinner</div>
+        <div className="text-sm font-semibold mb-3">Log a Meal</div>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <div>
             <div className="label">Date</div>
@@ -916,51 +947,17 @@ export default function App() {
                       <div className="flex items-center gap-2">{appPickIdx===idx && <span className="badge">Chosen</span>}<div className="font-medium">{displayTitle(s.meal.dish)} <span className="text-zinc-500">• {displayTitle(s.meal.cuisine, '—')}</span></div></div>
                       <div className="text-xs text-zinc-600">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
                     </div>
-                    <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: s.meal.id, label: displayTitle(s.meal.cuisine, '—'), suggestedRestaurant: displayTitle(s.meal.restaurant, undefined as any), dish: displayTitle(s.meal.dish), estCost: s.meal.cost, score: 0, tier: deriveTier(s.meal.cost) }); setEggOpen(true); }}>Select</button>
+                    <div className="flex gap-2">
+                      <button className="btn-ghost" title="Log immediately to meal history" onClick={()=> logFromMeal(s.meal)}>Log</button>
+                      <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: s.meal.id, label: displayTitle(s.meal.cuisine, '—'), suggestedRestaurant: displayTitle(s.meal.restaurant, undefined as any), dish: displayTitle(s.meal.dish), estCost: s.meal.cost, score: 0, tier: deriveTier(s.meal.cost) }); setEggOpen(true); }}>Select</button>
+                    </div>
                   </div>
                 ))}
         </div>
             )}
       </div>
 
-      {/* Recommendations */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">Recommendations</div>
-          <div className="text-xs text-zinc-600">{filteredRecs.length} options</div>
-        </div>
-        {filteredRecs.length ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredRecs.map(r => (
-              <div key={r.key} className="card p-5 hover:shadow-lg transition">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="badge">{r.tier}</span>
-                        <div className="font-semibold">{displayTitle(r.label, '—')}</div>
-                  </div>
-                  <span className="badge border-zinc-300">{currency(r.estCost)}</span>
-                </div>
-                <div className="mt-2 text-sm text-zinc-600">Score {Math.round(r.score)}</div>
-                    <div className="mt-2 text-sm">Latest: <span className="font-medium">{r.suggestedRestaurant ? displayTitle(r.suggestedRestaurant) : "Chef's Choice"}</span></div>
-                    <div className="text-sm text-zinc-600">Dish: {r.dish ? displayTitle(r.dish) : 'Signature'}</div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    className="btn-primary"
-                        onClick={() => { setIsOverride(true); setPicked({ ...r, label: displayTitle(r.label, '—'), suggestedRestaurant: r.suggestedRestaurant ? displayTitle(r.suggestedRestaurant) : undefined, dish: r.dish ? displayTitle(r.dish) : undefined }); setEggOpen(true); }}
-                    title="Override the algorithm with this pick"
-                  >
-                    Choose Meal
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="card p-8 text-center text-sm text-zinc-600">No recommendations yet. Log a dinner or load demo data.</div>
-        )}
-      </div>
-        </>
-      )}
+      {/* Recommendations removed per request to simplify Home */}
 
       {/* Scoring explain modal */}
       {scoreHelpOpen && (
@@ -998,35 +995,37 @@ export default function App() {
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <button className="btn-ghost" onClick={()=> setBrowseDetailKey(null)}>Close</button>
-                <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); setBrowseDetailKey(null); }}>Add to Dinner History</button>
+                <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); setBrowseDetailKey(null); }}>Add to Meal History</button>
               </div>
             </div>
           </div>
         );
       })()}
 
-      {/* History table Title Case display */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between"><div className="text-sm font-semibold">Dinner History</div><button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button></div>
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Cuisine</th><th className="th text-left">Restaurant</th><th className="th text-left">Dish</th><th className="th text-right">Cost</th><th className="th text-center">Rating</th><th className="th text-center">Actions</th></tr></thead>
-            <tbody>
-              {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
-                <tr key={m.id} className="hover:bg-zinc-50">
-                  <td className="td">{m.date.slice(0,10)}</td>
-                  <td className="td">{displayTitle(m.cuisine, '—')}</td>
-                  <td className="td">{displayTitle(m.restaurant, '—')}</td>
-                  <td className="td">{displayTitle(m.dish)}</td>
-                  <td className="td text-right">{currency(m.cost)}</td>
-                  <td className="td text-center">{m.rating ?? '—'}</td>
-                  <td className="td text-center"><button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button><button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Meal History (Home only) */}
+      {activeTab === 'home' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between"><div className="text-sm font-semibold">Meal History</div><button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button></div>
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Cuisine</th><th className="th text-left">Restaurant</th><th className="th text-left">Dish</th><th className="th text-right">Cost</th><th className="th text-center">Rating</th><th className="th text-center">Actions</th></tr></thead>
+              <tbody>
+                {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
+                  <tr key={m.id} className="hover:bg-zinc-50">
+                    <td className="td">{m.date.slice(0,10)}</td>
+                    <td className="td">{displayTitle(m.cuisine, '—')}</td>
+                    <td className="td">{displayTitle(m.restaurant, '—')}</td>
+                    <td className="td">{displayTitle(m.dish)}</td>
+                    <td className="td text-right">{currency(m.cost)}</td>
+                    <td className="td text-center">{m.rating ?? '—'}</td>
+                    <td className="td text-center"><button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button><button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Edit history modal */}
       {editMeal && (
@@ -1120,9 +1119,20 @@ export default function App() {
         );
       })()}
 
-      <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Dinner History"} />
+      </>
+      )}
+
+      <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Meal History"} />
 
       <footer className="pb-8 pt-2 text-center text-xs text-zinc-500">Built for MVP demo • Data saved to Supabase database</footer>
+      {/* Toast */}
+      {toast.show && (
+        <div className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 transform">
+          <div className="rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">
+            {toast.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
