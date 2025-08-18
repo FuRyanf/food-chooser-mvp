@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DollarSign, Egg, Filter, History, Sparkles } from 'lucide-react';
+import { DollarSign, Egg, Filter, History, Info, Sparkles } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
@@ -19,12 +19,10 @@ type Recommendation = {
   tier: EggTier;
 };
 
-// NEW: overrides map (cuisine -> count)
 type Overrides = Record<string, number>;
 
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 const todayISO = ()=> new Date().toISOString().slice(0,10);
-const uid = ()=> Math.random().toString(36).slice(2,10);
 const daysSince = (iso:string)=> Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000));
 function pseudoWeatherForDate(iso:string): Weather {
   const d = new Date(iso); const seed = (d.getMonth()+1)*37 + d.getDate()*17; const tempF = 50 + (seed % 50);
@@ -41,7 +39,6 @@ const seedMeals: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = 
   { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null },
 ];
 
-// UPDATED: add overrides param and bonus to the score
 function buildRecommendations(
   meals: Meal[],
   budget: Budget,
@@ -56,11 +53,11 @@ function buildRecommendations(
     const sorted = [...arr].sort((a,b)=> +new Date(b.date) - +new Date(a.date));
     const last = sorted[0];
     const avgRating = arr.reduce((s,m)=> s + (m.rating ?? 3), 0)/arr.length;
-    const avgCost = arr.reduce((s,m)=> s + m.cost, 0)/arr.length;
+    const lastCost = last.cost; // latest price
     const lastDays = daysSince(last.date);
     const recencyPenalty = lastDays <= forbidRepeatDays ? -100 : Math.max(-8, -1 * (6 - Math.min(6, lastDays)));
-    const within = avgCost >= budget.min && avgCost <= budget.max;
-    const budgetFit = within ? 12 : -Math.min(Math.abs(avgCost - (avgCost < budget.min ? budget.min : budget.max))/5, 10);
+    const within = lastCost >= budget.min && lastCost <= budget.max;
+    const budgetFit = within ? 12 : -Math.min(Math.abs(lastCost - (lastCost < budget.min ? budget.min : budget.max))/5, 10);
     const todayWx = pseudoWeatherForDate(todayISO());
     let weatherBonus = 0;
     if (todayWx.condition==='hot' && ['Japanese','Salad','Mexican'].includes(cuisine)) weatherBonus += 3;
@@ -69,91 +66,143 @@ function buildRecommendations(
     const last30 = arr.filter(m => daysSince(m.date) <= 30).length;
     const trend = last30 >= 2 && avgRating >= 4 ? 5 : 0;
 
-    const overrideBonus = (overrides[cuisine] ?? 0) * 3; // NEW: +3 per manual choose
+    const overrideBonus = (overrides[cuisine] ?? 0) * 3;
 
-    const score = avgRating * 6 + recencyPenalty + budgetFit + weatherBonus + trend + overrideBonus;
+    const score = (avgRating * 6) + recencyPenalty + budgetFit + weatherBonus + trend + overrideBonus;
 
     recs.push({
       key: cuisine,
       label: cuisine,
-      suggestedRestaurant: sorted[0]?.restaurant ?? undefined,
-      dish: sorted[0]?.dish,
-      estCost: Math.round(avgCost*100)/100,
+      suggestedRestaurant: last.restaurant ?? undefined,
+      dish: last.dish,
+      estCost: lastCost, // always show latest price
       score,
-      tier: deriveTier(avgCost)
+      tier: deriveTier(lastCost)
     });
   }
-  return recs.sort((a,b)=> b.score - a.score);
+  // Always honor budget range for suggestions based on latest price
+  return recs.filter(x=> x.estCost>=budget.min && x.estCost<=budget.max).sort((a,b)=> b.score - a.score);
+}
+
+// Detailed per-meal ranking breakdown (documented)
+// score = ratingWeight + recencyPenalty + budgetFit + weatherBonus + jitter
+// - ratingWeight: (rating || 3) * 10
+// - recencyPenalty: max(-12, -1 * (20 - min(20, daysSince)))
+// - budgetFit: +8 if within, else -((distance)/4) capped at -12
+// - weatherBonus: small cuisine-based bonus
+// - jitter: uniform in [-1.5, 1.5]
+function computeMealScoreBreakdown(meal: Meal, budget: Budget, today: Weather) {
+  const ratingWeight = (meal.rating ?? 3) * 10;
+  const ds = daysSince(meal.date);
+  const recencyPenalty = Math.max(-12, -1 * (20 - Math.min(20, ds)));
+  const within = meal.cost >= budget.min && meal.cost <= budget.max;
+  const budgetFit = within ? 8 : -Math.min(Math.abs(meal.cost - (meal.cost < budget.min ? budget.min : budget.max))/4, 12);
+  let weatherBonus = 0;
+  if (today.condition==='hot' && ['Japanese','Salad','Mexican'].includes(meal.cuisine)) weatherBonus += 2;
+  if (today.condition==='cold' && ['Ramen','Indian','Italian'].includes(meal.cuisine)) weatherBonus += 3;
+  if (today.condition==='rain' && ['Pho','Ramen','Curry'].includes(meal.cuisine)) weatherBonus += 3;
+  const jitter = (Math.random()*3) - 1.5;
+  const total = ratingWeight + recencyPenalty + budgetFit + weatherBonus + jitter;
+  return { ratingWeight, recencyPenalty, budgetFit, weatherBonus, jitter, total };
 }
 
 export default function App() {
   const [meals, setMeals] = useState<Meal[]>([]);
-  const [budget, setBudget] = useState<Budget>({ min: 10, max: 35 });
-  const [forbidRepeatDays, setForbidRepeatDays] = useState(1);
-  const [strictBudget, setStrictBudget] = useState(false);
+  // Saved preferences used by computation
+  const [budgetSaved, setBudgetSaved] = useState<Budget>({ min: 10, max: 35 });
+  const [forbidRepeatDaysSaved, setForbidRepeatDaysSaved] = useState(1);
+  // Draft UI state for editing preferences
+  const [budgetDraft, setBudgetDraft] = useState<{ min: string; max: string }>({ min: '10', max: '35' });
+  const [forbidRepeatDaysDraft, setForbidRepeatDaysDraft] = useState<string>('1');
+  // quick search on Home
   const [search, setSearch] = useState('');
   const [eggOpen, setEggOpen] = useState(false);
   const [picked, setPicked] = useState<Recommendation | undefined>();
-  const [overrides, setOverrides] = useState<Overrides>({});     // NEW
-  const [isOverride, setIsOverride] = useState(false);           // NEW: did user manually choose?
-  
-  // NEW: Loading and error states
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [isOverride, setIsOverride] = useState(false);
+
+  // Tabs: Home (default) and Browse (right)
+  const [activeTab, setActiveTab] = useState<'home'|'browse'>('home');
+  const [browseSearch, setBrowseSearch] = useState('');
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [scoreHelpOpen, setScoreHelpOpen] = useState(false);
+  const [scoreHelpText, setScoreHelpText] = useState<string>('');
+
+  // Browse details modal
+  const [browseDetailKey, setBrowseDetailKey] = useState<string | null>(null);
+
+  // Edit history modal
+  const [editMeal, setEditMeal] = useState<Meal | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Prefs save state
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSavedNotice, setPrefsSavedNotice] = useState<string | null>(null);
 
-  // Load data from Supabase on component mount
-  useEffect(()=>{ 
-    loadData();
-  }, []);
+  useEffect(()=>{ loadData(); }, []);
 
   async function loadData() {
     try {
       setLoading(true);
       setError(null);
-      
-      // Load meals, preferences, and overrides in parallel
       const [mealsData, prefsData, overridesData] = await Promise.all([
         FoodChooserAPI.getMeals(),
         FoodChooserAPI.getUserPreferences(),
         FoodChooserAPI.getOverridesMap()
       ]);
-
       setMeals(mealsData);
       if (prefsData) {
-        setBudget({ min: prefsData.budget_min, max: prefsData.budget_max });
-        setForbidRepeatDays(prefsData.forbid_repeat_days);
-        setStrictBudget(prefsData.strict_budget);
+        const savedBudget = { min: prefsData.budget_min, max: prefsData.budget_max };
+        setBudgetSaved(savedBudget);
+        setForbidRepeatDaysSaved(prefsData.forbid_repeat_days);
+        // sync drafts to saved
+        setBudgetDraft({ min: String(savedBudget.min), max: String(savedBudget.max) });
+        setForbidRepeatDaysDraft(String(prefsData.forbid_repeat_days));
       }
       setOverrides(overridesData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally { setLoading(false); }
+  }
+
+  // Save preferences explicitly with validation
+  async function savePreferences() {
+    setPrefsError(null);
+    setPrefsSavedNotice(null);
+    const min = Number(budgetDraft.min);
+    const max = Number(budgetDraft.max);
+    const days = Number(forbidRepeatDaysDraft);
+    if (!isFinite(min) || !isFinite(max)) { setPrefsError('Please enter valid numeric min and max.'); return; }
+    if (min < 0 || max < 0) { setPrefsError('Min and Max must be non-negative.'); return; }
+    if (max < min) { setPrefsError('Max must be greater than or equal to Min.'); return; }
+    if (!Number.isInteger(days) || days < 0 || days > 14) { setPrefsError('No repeat within days must be an integer between 0 and 14.'); return; }
+    try {
+      setPrefsSaving(true);
+      const saved = await FoodChooserAPI.upsertUserPreferences({
+        budget_min: min,
+        budget_max: max,
+        forbid_repeat_days: days,
+        strict_budget: true
+      });
+      setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
+      setForbidRepeatDaysSaved(saved.forbid_repeat_days);
+      setPrefsSavedNotice('Preferences saved.');
+    } catch (e) {
+      console.error('Failed to save preferences', e);
+      setPrefsError('Failed to save preferences.');
     } finally {
-      setLoading(false);
+      setPrefsSaving(false);
     }
   }
 
-  // Save preferences to Supabase whenever they change
-  useEffect(() => {
-    if (!loading) {
-      FoodChooserAPI.upsertUserPreferences({
-        budget_min: budget.min,
-        budget_max: budget.max,
-        forbid_repeat_days: forbidRepeatDays,
-        strict_budget: strictBudget
-      }).catch(err => {
-        console.error('Error saving preferences:', err);
-        setError('Failed to save preferences');
-      });
-    }
-  }, [budget, forbidRepeatDays, strictBudget, loading]);
-
   const cuisines = useMemo(()=> [...new Set(meals.map(m=>m.cuisine))], [meals]);
   const wx = pseudoWeatherForDate(todayISO());
-  const recs = useMemo(()=>{
-    const r = buildRecommendations(meals, budget, forbidRepeatDays, overrides); // pass overrides
-    return strictBudget ? r.filter(x=> x.estCost>=budget.min && x.estCost<=budget.max) : r;
-  }, [meals, budget, forbidRepeatDays, strictBudget, overrides]);
+  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides), [meals, budgetSaved, forbidRepeatDaysSaved, overrides]);
   const filteredRecs = recs.filter(r=> r.label.toLowerCase().includes(search.toLowerCase()));
 
   const totalSpend30d = useMemo(()=>{
@@ -169,53 +218,48 @@ export default function App() {
     return days;
   }, [meals]);
 
-  async function seedDemo(){ 
-    try {
-      setError(null);
-      for (const meal of seedMeals) {
-        await FoodChooserAPI.addMeal(meal);
-      }
-      await loadData(); // Reload data to show new meals
-    } catch (err) {
-      console.error('Error seeding demo data:', err);
-      setError('Failed to load demo data');
-    }
+  async function seedDemo(){
+    try { setError(null); for (const meal of seedMeals) { await FoodChooserAPI.addMeal(meal); } await loadData(); }
+    catch (err) { console.error('Error seeding demo data:', err); setError('Failed to load demo data'); }
   }
 
-  async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){ 
-    try {
-      setError(null);
-      const newMeal = await FoodChooserAPI.addMeal(mealData);
-      setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
-    } catch (err) {
-      console.error('Error adding meal:', err);
-      setError('Failed to add meal');
-    }
+  async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){
+    try { setError(null); const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
+    catch (err) { console.error('Error adding meal:', err); setError('Failed to add meal'); }
   }
 
-  async function deleteMeal(id:string){ 
-    try {
-      setError(null);
-      await FoodChooserAPI.deleteMeal(id);
-      setMeals(prev => prev.filter(m=> m.id!==id));
-    } catch (err) {
-      console.error('Error deleting meal:', err);
-      setError('Failed to delete meal');
+  // For Browse: compute deduped entries by (restaurant, dish) with latest date and latest price
+  const browseEntries = useMemo(() => {
+    const byKey = new Map<string, Meal[]>();
+    for (const m of meals) {
+      const key = `${m.restaurant ?? '—'}|${m.dish}`;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push(m);
     }
-  }
+    const items = Array.from(byKey.entries()).map(([key, list]) => {
+      const sorted = [...list].sort((a,b)=> +new Date(b.date) - +new Date(a.date));
+      const latest = sorted[0];
+      return { key, latest, history: sorted.slice().reverse() };
+    });
+    return items.filter(it => {
+      const q = browseSearch.toLowerCase();
+      if (!q) return true;
+      return (
+        it.latest.dish.toLowerCase().includes(q) ||
+        (it.latest.restaurant ?? '').toLowerCase().includes(q) ||
+        it.latest.cuisine.toLowerCase().includes(q)
+      );
+    });
+  }, [meals, browseSearch]);
 
-  // UPDATED: crack egg via algorithmic pick (not override)
   function crackEgg(){
-    setIsOverride(false); // ensure algorithmic flow
-    if (!filteredRecs.length){ setPicked(undefined); setEggOpen(true); return; }
-    const max = Math.max(...filteredRecs.map(r=>r.score));
-    const weights = filteredRecs.map(r=> Math.exp((r.score - max)/8));
-    const sum = weights.reduce((a,b)=> a+b, 0);
-    let t = Math.random()*sum, i=0; for(; i<weights.length; i++){ t -= weights[i]; if (t<=0) break; }
-    setPicked(filteredRecs[Math.min(i, filteredRecs.length-1)]); setEggOpen(true);
+    setIsOverride(false);
+    if (!rankedMeals.length){ setPicked(undefined); setEggOpen(true); return; }
+    const top = rankedMeals[0].meal;
+    setPicked({ key: top.id, label: top.cuisine, suggestedRestaurant: top.restaurant ?? undefined, dish: top.dish, estCost: top.cost, score: 0, tier: deriveTier(top.cost) });
+    setEggOpen(true);
   }
 
-  // Add meal form state
   const [date, setDate] = useState(todayISO());
   const [restaurant, setRestaurant] = useState('');
   const [dish, setDish] = useState('');
@@ -225,72 +269,110 @@ export default function App() {
   const [notes, setNotes] = useState('');
 
   async function submitMeal(){
-    const mealData = { 
-      date: new Date(date).toISOString(), 
-      restaurant: restaurant || null, 
-      dish: dish || "Chef's choice", 
-      cuisine: cuisineInput, 
-      cost: Math.max(0, Number(cost) || 0), 
-      rating, 
-      notes: notes || null 
-    };
+    const mealData = { date: new Date(date).toISOString(), restaurant: restaurant || null, dish: dish || "Chef's choice", cuisine: cuisineInput, cost: Math.max(0, Number(cost) || 0), rating, notes: notes || null };
     await addMeal(mealData);
     setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes('');
   }
 
-  // NEW: when user confirms in gacha, save to history and apply override boost if needed
   async function handleOrder(rec: Recommendation) {
     try {
       setError(null);
-      const mealData = {
-        date: new Date().toISOString(),
-        restaurant: rec.suggestedRestaurant || null,
-        dish: rec.dish ?? rec.label,
-        cuisine: rec.label,
-        cost: rec.estCost,
-        rating: null,
-        notes: null
-      };
+      const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null };
       await addMeal(mealData);
-
-      if (isOverride) {
-        const newCount = (overrides[rec.label] ?? 0) + 1;
-        await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount);
-        setOverrides(prev => ({ ...prev, [rec.label]: newCount }));
-      }
+      if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount); }
       setIsOverride(false);
-    } catch (err) {
-      console.error('Error handling order:', err);
-      setError('Failed to save meal');
+    } catch (err) { console.error('Error handling order:', err); setError('Failed to save meal'); }
+  }
+
+  const rankedMeals = useMemo(() => {
+    const scored = meals
+      .filter(m => m.cost >= budgetSaved.min && m.cost <= budgetSaved.max)
+      .map(m => { const b = computeMealScoreBreakdown(m, budgetSaved, wx); return { meal: m, score: b.total, breakdown: b }; });
+    const bestByKey = new Map<string, { meal: Meal; score: number; breakdown: ReturnType<typeof computeMealScoreBreakdown> }>();
+    for (const s of scored) {
+      const key = `${s.meal.restaurant ?? '—'}|${s.meal.dish}`;
+      const prev = bestByKey.get(key);
+      if (!prev || s.score > prev.score) bestByKey.set(key, s);
+    }
+    const deduped = Array.from(bestByKey.values());
+    deduped.sort((a,b) => (b.score !== a.score) ? (b.score - a.score) : (b.meal.cost - a.meal.cost));
+    return deduped;
+  }, [meals, budgetSaved, wx]);
+
+  function openScoreHelp() {
+    if (!rankedMeals.length) return;
+    const top = rankedMeals[0];
+    const b = top.breakdown;
+    const lines = [
+      `Rating weight: ${b.ratingWeight.toFixed(1)}`,
+      `Recency penalty: ${b.recencyPenalty.toFixed(1)}`,
+      `Budget fit: ${b.budgetFit.toFixed(1)}`,
+      `Weather bonus: ${b.weatherBonus.toFixed(1)}`,
+      `Random jitter: ${b.jitter.toFixed(1)}`,
+      `Total score: ${b.total.toFixed(1)}`
+    ];
+    setScoreHelpText(lines.join('\n'));
+    setScoreHelpOpen(true);
+  }
+
+  // Browse: open detail modal
+  function openBrowseDetail(key: string) { setBrowseDetailKey(key); }
+  function closeBrowseDetail() { setBrowseDetailKey(null); }
+
+  // Browse: add latest entry to dinner history
+  async function addBrowseEntryToHistory(key: string) {
+    const entry = browseEntries.find(e => e.key === key);
+    if (!entry) return;
+    const latest = entry.latest;
+    await addMeal({ date: new Date().toISOString(), restaurant: latest.restaurant, dish: latest.dish, cuisine: latest.cuisine, cost: latest.cost, rating: latest.rating ?? null, notes: latest.notes ?? null });
+  }
+
+  // History edit helpers
+  function startEdit(m: Meal) { setEditMeal(m); }
+  async function saveEdit() {
+    if (!editMeal) return;
+    try {
+      setEditSaving(true);
+      const updated = await FoodChooserAPI.updateMeal(editMeal.id, {
+        date: editMeal.date,
+        restaurant: editMeal.restaurant,
+        dish: editMeal.dish,
+        cuisine: editMeal.cuisine,
+        cost: editMeal.cost,
+        rating: editMeal.rating ?? null,
+        notes: editMeal.notes ?? null
+      });
+      setMeals(prev => prev.map(m => m.id === updated.id ? updated : m).sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
+      setEditMeal(null);
+    } catch (e) {
+      console.error('Save edit failed', e);
+      setError('Failed to save edit');
+    } finally { setEditSaving(false); }
+  }
+  async function deleteHistory(id: string) {
+    try {
+      await FoodChooserAPI.deleteMeal(id);
+      setMeals(prev => prev.filter(m => m.id !== id));
+    } catch (e) {
+      console.error('Delete failed', e);
+      setError('Failed to delete entry');
     }
   }
 
-  // Show loading state
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Loading your food data...</div>
-        </div>
+        <div className="flex items-center justify-center h-64"><div className="text-lg">Loading your food data...</div></div>
       </div>
     );
   }
 
-  // Show error state
   if (error) {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
         <div className="card p-8 text-center">
           <div className="text-red-600 mb-4">Error: {error}</div>
-          <button 
-            className="btn-primary" 
-            onClick={() => {
-              setError(null);
-              loadData();
-            }}
-          >
-            Retry
-          </button>
+          <button className="btn-primary" onClick={() => { setError(null); loadData(); }}>Retry</button>
         </div>
       </div>
     );
@@ -300,204 +382,223 @@ export default function App() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
-          </div>
+          <div className="flex items-center gap-2"><Sparkles className="h-6 w-6" /><h1 className="text-2xl font-bold md:text-3xl">FuDi</h1></div>
           <p className="text-sm text-zinc-600">Smart, fun dinner picks — personalized by mood, budget, and weather.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
+          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
           <button className="btn-outline" onClick={seedDemo}><History className="h-4 w-4"/> Load Demo Data</button>
           <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
       </header>
 
-      {/* Controls */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {activeTab==='browse' ? (
         <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Budget</div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <div className="label">Min</div>
-              <input className="input" type="number" value={budget.min} onChange={e=> setBudget({...budget, min:Number(e.target.value)})} />
-            </div>
-            <div>
-              <div className="label">Max</div>
-              <input className="input" type="number" value={budget.max} onChange={e=> setBudget({...budget, max:Number(e.target.value)})} />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={strictBudget} onChange={e=> setStrictBudget(e.target.checked)} />
-            Strict budget only
-          </label>
-          <div className="mt-3 text-sm">No repeat within (days)</div>
-          <select className="select mt-1" value={String(forbidRepeatDays)} onChange={e=> setForbidRepeatDays(Number(e.target.value))}>
-            {[1,2,3,4,5,6,7].map(n=> <option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
-
-        <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Today's Context</div>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <div className="label">Condition</div>
-              <div className="text-lg font-semibold capitalize">{wx.condition}</div>
-            </div>
-            <div>
-              <div className="label">Temp</div>
-              <div className="text-lg font-semibold">{wx.tempF}°F</div>
-            </div>
-            <div>
-              <div className="label">30d Spend</div>
-              <div className="text-lg font-semibold">{currency(totalSpend30d)}</div>
-            </div>
-          </div>
-          <div className="mt-4 h-[120px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" hide />
-                <YAxis hide />
-                <Tooltip />
-                <Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Quick Filters</div>
-          <div className="label">Search cuisines</div>
+          <div className="text-sm font-semibold mb-2">Browse Meals</div>
           <div className="mt-1 flex items-center gap-2">
-            <input className="input" placeholder="e.g., Mexican, Ramen…" value={search} onChange={e=> setSearch(e.target.value)} />
-            <button className="btn-ghost" onClick={()=> setSearch('')}><Filter className="h-4 w-4"/></button>
+            <input className="input" placeholder="Search dish, restaurant, cuisine" value={browseSearch} onChange={e=> setBrowseSearch(e.target.value)} />
+            <button className="btn-ghost" onClick={()=> setBrowseSearch('')}><Filter className="h-4 w-4"/></button>
           </div>
-          <p className="mt-2 text-xs text-zinc-600">Tip: Load demo data, tweak budget, then crack the egg.</p>
-        </div>
-      </div>
-
-      {/* Log Dinner */}
-      <div className="card p-5">
-        <div className="text-sm font-semibold mb-3">Log a Dinner</div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <div className="label">Date</div>
-            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Cost (USD)</div>
-            <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Cuisine</div>
-            <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
-            <datalist id="cuisine-list">
-              {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
-            </datalist>
-          </div>
-          <div>
-            <div className="label">Restaurant</div>
-            <input className="input" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
-          </div>
-          <div>
-            <div className="label">Dish</div>
-            <input className="input" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
-          </div>
-          <div>
-            <div className="label">Rating (1-5)</div>
-            <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <div className="label">Notes</div>
-            <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
-          </div>
-        </div>
-        <div className="mt-3 flex justify-end">
-          <button className="btn-primary" onClick={submitMeal}>Save Meal</button>
-        </div>
-      </div>
-
-      {/* Recommendations */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">Recommendations</div>
-          <div className="text-xs text-zinc-600">{filteredRecs.length} options</div>
-        </div>
-        {filteredRecs.length ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredRecs.map(r => (
-              <div key={r.key} className="card p-5 hover:shadow-lg transition">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {browseEntries.map(e => (
+              <div key={e.key} className="card p-5 hover:shadow transition cursor-pointer" onClick={()=> openBrowseDetail(e.key)}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="badge">{r.tier}</span>
-                    <div className="font-semibold">{r.label}</div>
-                  </div>
-                  <span className="badge border-zinc-300">{currency(r.estCost)}</span>
+                  <div className="font-semibold">{e.latest.dish}</div>
+                  <span className="badge">{e.latest.rating ?? '—'}★</span>
                 </div>
-                <div className="mt-2 text-sm text-zinc-600">Score {Math.round(r.score)}</div>
-                <div className="mt-2 text-sm">Latest: <span className="font-medium">{r.suggestedRestaurant ?? "Chef's Choice"}</span></div>
-                <div className="text-sm text-zinc-600">Dish: {r.dish ?? 'Signature'}</div>
-                <div className="mt-3 flex justify-end">
-                  {/* UPDATED: Choose Meal (override) */}
-                  <button
-                    className="btn-primary"
-                    onClick={() => { setIsOverride(true); setPicked(r); setEggOpen(true); }}
-                    title="Override the algorithm with this pick"
-                  >
-                    Choose Meal
-                  </button>
-                </div>
+                <div className="text-sm text-zinc-600">{e.latest.restaurant ?? 'Unknown'} • {e.latest.cuisine}</div>
+                <div className="text-sm text-zinc-600">Latest: {currency(e.latest.cost)} • {new Date(e.latest.date).toISOString().slice(0,10)}</div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="card p-8 text-center text-sm text-zinc-600">No recommendations yet. Log a dinner or load demo data.</div>
-        )}
-      </div>
-
-      {/* History */}
-      <div className="card p-5">
-        <div className="text-sm font-semibold mb-3">Dinner History</div>
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr className="bg-zinc-50">
-                <th className="th text-left">Date</th>
-                <th className="th text-left">Cuisine</th>
-                <th className="th text-left">Restaurant</th>
-                <th className="th text-left">Dish</th>
-                <th className="th text-right">Cost</th>
-                <th className="th text-center">Rating</th>
-                <th className="th text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {meals.map(m => (
-                <tr key={m.id} className="hover:bg-zinc-50">
-                  <td className="td">{m.date.slice(0,10)}</td>
-                  <td className="td">{m.cuisine}</td>
-                  <td className="td">{m.restaurant ?? '—'}</td>
-                  <td className="td">{m.dish}</td>
-                  <td className="td text-right">{currency(m.cost)}</td>
-                  <td className="td text-center">{m.rating ?? '—'}</td>
-                  <td className="td text-center">
-                    <button className="btn-ghost" onClick={()=> deleteMeal(m.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Controls */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="card p-5">
+              <div className="text-sm font-semibold mb-1">Budget</div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <div className="label">Min</div>
+                  <input className="input" type="number" value={budgetDraft.min} onChange={e=> setBudgetDraft(prev=> ({...prev, min: e.target.value}))} />
+                </div>
+                <div>
+                  <div className="label">Max</div>
+                  <input className="input" type="number" value={budgetDraft.max} onChange={e=> setBudgetDraft(prev=> ({...prev, max: e.target.value}))} />
+                </div>
+              </div>
+              <div className="mt-1 text-xs text-zinc-600">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
+              <div className="mt-3 text-sm">No repeat within (days)</div>
+              <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e=> setForbidRepeatDaysDraft(e.target.value)}>
+                {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n}</option>)}
+              </select>
+              {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
+              {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    setPrefsError(null);
+                    setPrefsSavedNotice(null);
+                    setBudgetDraft({ min: String(budgetSaved.min), max: String(budgetSaved.max) });
+                    setForbidRepeatDaysDraft(String(forbidRepeatDaysSaved));
+                  }}
+                >
+                  Reset to saved
+                </button>
+                <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
+              </div>
+            </div>
 
-      {/* Gacha modal: now saves to history and respects overrides */}
-      <EggGacha
-        open={eggOpen}
-        pick={picked}
-        onClose={() => setEggOpen(false)}
-        onOrder={handleOrder}
-        confirmLabel={isOverride ? "Choose & Save" : "Save to Dinner History"}
-      />
+            <div className="card p-5">
+              <div className="text-sm font-semibold mb-1">Today's Context</div>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div><div className="label">Condition</div><div className="text-lg font-semibold capitalize">{wx.condition}</div></div>
+                <div><div className="label">Temp</div><div className="text-lg font-semibold">{wx.tempF}°F</div></div>
+                <div><div className="label">30d Spend</div><div className="text-lg font-semibold">{currency(totalSpend30d)}</div></div>
+              </div>
+              <div className="mt-4 h-[120px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" hide /><YAxis hide /><Tooltip /><Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} /></LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card p-5">
+              <div className="text-sm font-semibold mb-1">Quick Filters</div>
+              <div className="label">Search cuisines</div>
+              <div className="mt-1 flex items-center gap-2"><input className="input" placeholder="e.g., Mexican, Ramen…" value={search} onChange={e=> setSearch(e.target.value)} /><button className="btn-ghost" onClick={()=> setSearch('')}><Filter className="h-4 w-4"/></button></div>
+              <p className="mt-2 text-xs text-zinc-600">Tip: Load demo data, tweak budget, then crack the egg.</p>
+            </div>
+          </div>
+
+          {/* Reveal Choices (Order Section) */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Top choices for you</div>
+              <div className="flex items-center gap-2"><button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}><Info className="h-4 w-4"/> Explain</button><button className="btn-ghost" onClick={()=> setOrderOpen(o=>!o)}>{orderOpen ? 'Hide' : 'Reveal Choices'}</button></div>
+            </div>
+            <div className="mt-1 text-xs text-zinc-600">Note: The first item here is exactly what the mystery egg will reveal.</div>
+            {orderOpen && (
+              <div className="mt-3 space-y-2">
+                {rankedMeals.slice(0,5).map((s, idx) => (
+                  <div key={s.meal.id} className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <div className="flex items-center gap-2">{idx===0 && <span className="badge">Chosen</span>}<div className="font-medium">{s.meal.dish} <span className="text-zinc-500">• {s.meal.cuisine}</span></div></div>
+                      <div className="text-xs text-zinc-600">{s.meal.restaurant ?? 'Unknown'} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
+                    </div>
+                    <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: s.meal.id, label: s.meal.cuisine, suggestedRestaurant: s.meal.restaurant ?? undefined, dish: s.meal.dish, estCost: s.meal.cost, score: 0, tier: deriveTier(s.meal.cost) }); setEggOpen(true); }}>Select</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Log Dinner */}
+          <div className="card p-5">
+            <div className="text-sm font-semibold mb-3">Log a Dinner</div>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div><div className="label">Date</div><input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} /></div>
+              <div><div className="label">Cost (USD)</div><input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} /></div>
+              <div><div className="label">Cuisine</div><input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} /><datalist id="cuisine-list">{['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}</datalist></div>
+              <div><div className="label">Restaurant</div><input className="input" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" /></div>
+              <div><div className="label">Dish</div><input className="input" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" /></div>
+              <div><div className="label">Rating (1-5)</div><input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} /></div>
+              <div className="md:col-span-2 lg:col-span-3"><div className="label">Notes</div><textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" /></div>
+            </div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
+          </div>
+
+          {/* History */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between"><div className="text-sm font-semibold">Dinner History</div><button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button></div>
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Cuisine</th><th className="th text-left">Restaurant</th><th className="th text-left">Dish</th><th className="th text-right">Cost</th><th className="th text-center">Rating</th><th className="th text-center">Actions</th></tr></thead>
+                <tbody>
+                  {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
+                    <tr key={m.id} className="hover:bg-zinc-50">
+                      <td className="td">{m.date.slice(0,10)}</td>
+                      <td className="td">{m.cuisine}</td>
+                      <td className="td">{m.restaurant ?? '—'}</td>
+                      <td className="td">{m.dish}</td>
+                      <td className="td text-right">{currency(m.cost)}</td>
+                      <td className="td text-center">{m.rating ?? '—'}</td>
+                      <td className="td text-center"><button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button><button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Scoring explain modal */}
+      {scoreHelpOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+            <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> How we ranked your top choice</div>
+            <pre className="whitespace-pre-wrap rounded bg-zinc-50 p-3 text-sm text-zinc-800">{scoreHelpText}</pre>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>Close</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Browse detail modal with price history */}
+      {browseDetailKey && (() => {
+        const entry = browseEntries.find(e => e.key === browseDetailKey)!;
+        const chart = entry.history.map(h => ({ date: new Date(h.date).toISOString().slice(0,10), price: h.cost }));
+        return (
+          <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={closeBrowseDetail}>
+            <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-lg font-semibold">{entry.latest.dish}</div>
+                <div className="text-sm text-zinc-600">{entry.latest.restaurant ?? 'Unknown'} • {entry.latest.cuisine}</div>
+              </div>
+              <div className="text-sm">Latest price: <span className="font-semibold">{currency(entry.latest.cost)}</span></div>
+              <div className="mt-3 h-[160px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chart}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis domain={['auto','auto']} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="price" strokeWidth={2} dot={true} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button className="btn-ghost" onClick={closeBrowseDetail}>Close</button>
+                <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); closeBrowseDetail(); }}>Add to Dinner History</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Edit history modal */}
+      {editMeal && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setEditMeal(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+            <div className="mb-2 text-lg font-semibold">Edit Dinner Entry</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><div className="label">Date</div><input className="input" type="datetime-local" value={new Date(editMeal.date).toISOString().slice(0,16)} onChange={e=> setEditMeal({...editMeal, date: new Date(e.target.value).toISOString()})} /></div>
+              <div><div className="label">Cost</div><input className="input" type="number" value={String(editMeal.cost)} onChange={e=> setEditMeal({...editMeal, cost: Number(e.target.value)||0})} /></div>
+              <div><div className="label">Cuisine</div><input className="input" value={editMeal.cuisine} onChange={e=> setEditMeal({...editMeal, cuisine: e.target.value})} /></div>
+              <div><div className="label">Restaurant</div><input className="input" value={editMeal.restaurant ?? ''} onChange={e=> setEditMeal({...editMeal, restaurant: e.target.value||null})} /></div>
+              <div><div className="label">Dish</div><input className="input" value={editMeal.dish} onChange={e=> setEditMeal({...editMeal, dish: e.target.value})} /></div>
+              <div><div className="label">Rating</div><input className="input" type="number" min={1} max={5} value={String(editMeal.rating ?? '')} onChange={e=> setEditMeal({...editMeal, rating: e.target.value? Number(e.target.value): null})} /></div>
+              <div className="md:col-span-2"><div className="label">Notes</div><textarea className="input" rows={2} value={editMeal.notes ?? ''} onChange={e=> setEditMeal({...editMeal, notes: e.target.value||null})} /></div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2"><button className="btn-ghost" onClick={()=> setEditMeal(null)}>Cancel</button><button className="btn-primary" disabled={editSaving} onClick={saveEdit}>{editSaving ? 'Saving…' : 'Save'}</button></div>
+          </div>
+        </div>
+      )}
+
+      <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Dinner History"} />
 
       <footer className="pb-8 pt-2 text-center text-xs text-zinc-500">Built for MVP demo • Data saved to Supabase database</footer>
     </div>
