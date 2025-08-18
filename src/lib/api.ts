@@ -7,10 +7,12 @@ type MealUpdate = Database['public']['Tables']['meals']['Update']
 
 type UserPreferences = Database['public']['Tables']['user_preferences']['Row']
 type UserPreferencesInsert = Database['public']['Tables']['user_preferences']['Insert']
-type UserPreferencesUpdate = Database['public']['Tables']['user_preferences']['Update']
 
 type CuisineOverride = Database['public']['Tables']['cuisine_overrides']['Row']
 type CuisineOverrideInsert = Database['public']['Tables']['cuisine_overrides']['Insert']
+
+type DisabledItem = Database['public']['Tables']['disabled_items']['Row']
+type DisabledItemInsert = Database['public']['Tables']['disabled_items']['Insert']
 
 // For now, we'll use a simple user ID. In a real app, you'd implement proper auth
 const DEMO_USER_ID = 'demo-user-123'
@@ -110,7 +112,7 @@ export class FoodChooserAPI {
       .eq('user_id', DEMO_USER_ID)
       .single()
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    if (error && (error as any).code !== 'PGRST116') { // PGRST116 = no rows returned
       console.error('Error fetching user preferences:', error)
       throw error
     }
@@ -195,5 +197,30 @@ export class FoodChooserAPI {
       acc[override.cuisine] = override.count
       return acc
     }, {} as Record<string, number>)
+  }
+
+  // Disabled Items
+  static async getDisabledItems(): Promise<Record<string, boolean>> {
+    checkSupabase()
+    const { data, error } = await supabase!
+      .from('disabled_items')
+      .select('restaurant_norm, dish_norm, disabled')
+      .eq('user_id', DEMO_USER_ID)
+    if (error) throw error
+    const map: Record<string, boolean> = {}
+    for (const row of data || []) {
+      map[`${row.restaurant_norm}|${row.dish_norm}`] = row.disabled
+    }
+    return map
+  }
+
+  static async setDisabledItem(restaurantNorm: string, dishNorm: string, disabled: boolean): Promise<void> {
+    checkSupabase()
+    const now = new Date().toISOString()
+    const upsertData: DisabledItemInsert = { user_id: DEMO_USER_ID, restaurant_norm: restaurantNorm, dish_norm: dishNorm, disabled, created_at: now, updated_at: now }
+    const { error } = await supabase!
+      .from('disabled_items')
+      .upsert(upsertData, { onConflict: 'user_id,restaurant_norm,dish_norm' })
+    if (error) throw error
   }
 }

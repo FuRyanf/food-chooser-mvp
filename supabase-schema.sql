@@ -97,3 +97,32 @@ GRANT ALL ON public.meals TO anon, authenticated;
 GRANT ALL ON public.user_preferences TO anon, authenticated;
 GRANT ALL ON public.cuisine_overrides TO anon, authenticated;
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+-- Add monthly_budget to user_preferences if not exists
+DO $$ BEGIN
+  ALTER TABLE public.user_preferences ADD COLUMN IF NOT EXISTS monthly_budget DECIMAL(10,2);
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Disabled items table
+CREATE TABLE IF NOT EXISTS public.disabled_items (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    restaurant_norm TEXT NOT NULL,
+    dish_norm TEXT NOT NULL,
+    disabled BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, restaurant_norm, dish_norm)
+);
+
+CREATE INDEX IF NOT EXISTS idx_disabled_items_user ON public.disabled_items(user_id);
+
+CREATE TRIGGER update_disabled_items_updated_at BEFORE UPDATE ON public.disabled_items
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- RLS (optional/demo): allow operations for demo user
+ALTER TABLE public.disabled_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all operations for demo user" ON public.disabled_items
+    FOR ALL USING (user_id = 'demo-user-123');
+
+GRANT ALL ON public.disabled_items TO anon, authenticated;

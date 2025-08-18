@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DollarSign, Egg, Filter, History, Info, Sparkles, Trash2 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
@@ -43,7 +43,8 @@ function buildRecommendations(
   meals: Meal[],
   budget: Budget,
   forbidRepeatDays = 1,
-  overrides: Overrides = {}
+  overrides: Overrides = {},
+  enforceNoRepeat = true
 ) {
   if (!meals.length) return [] as Recommendation[];
   const byCuisine = new Map<string, Meal[]>();
@@ -55,8 +56,8 @@ function buildRecommendations(
     const avgRating = arr.reduce((s,m)=> s + (m.rating ?? 3), 0)/arr.length;
     const lastCost = last.cost; // latest price
     const lastDays = daysSince(last.date);
-    // Enforce no-repeat: skip cuisines eaten within the forbidden window
-    if (lastDays <= forbidRepeatDays) continue;
+    // Enforce no-repeat only if opted-in and window > 0
+    if (enforceNoRepeat && forbidRepeatDays > 0 && lastDays <= forbidRepeatDays) continue;
     const recencyPenalty = Math.max(-8, -1 * (6 - Math.min(6, lastDays)));
     const within = lastCost >= budget.min && lastCost <= budget.max;
     const budgetFit = within ? 12 : -Math.min(Math.abs(lastCost - (lastCost < budget.min ? budget.min : budget.max))/5, 10);
@@ -77,7 +78,7 @@ function buildRecommendations(
       label: cuisine,
       suggestedRestaurant: last.restaurant ?? undefined,
       dish: last.dish,
-      estCost: lastCost, // always show latest price
+      estCost: lastCost,
       score,
       tier: deriveTier(lastCost)
     });
@@ -112,10 +113,11 @@ export default function App() {
   // Saved preferences used by computation
   const [budgetSaved, setBudgetSaved] = useState<Budget>({ min: 10, max: 35 });
   const [forbidRepeatDaysSaved, setForbidRepeatDaysSaved] = useState(1);
+  // Toggle enforcement of no-repeat window
+  const [enforceNoRepeat, setEnforceNoRepeat] = useState(true);
   // Draft UI state for editing preferences
   const [budgetDraft, setBudgetDraft] = useState<{ min: string; max: string }>({ min: '10', max: '35' });
   const [forbidRepeatDaysDraft, setForbidRepeatDaysDraft] = useState<string>('1');
-  // quick search on Home
   const [search, setSearch] = useState('');
   const [eggOpen, setEggOpen] = useState(false);
   const [picked, setPicked] = useState<Recommendation | undefined>();
@@ -130,13 +132,51 @@ export default function App() {
   const [scoreHelpOpen, setScoreHelpOpen] = useState(false);
   const [scoreHelpText, setScoreHelpText] = useState<string>('');
 
-  // Browse details modal
+  // Browse detail modal key
   const [browseDetailKey, setBrowseDetailKey] = useState<string | null>(null);
 
   // Edit history modal
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
   const [editOriginal, setEditOriginal] = useState<Meal | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+
+  // Cool-off map (restaurant|dish normalized) persisted locally
+  const [coolOff, setCoolOff] = useState<Record<string, boolean>>({});
+  const [coolSavingKey, setCoolSavingKey] = useState<string | null>(null);
+  // Cuisine filter (UI-only; decoupled from disables)
+  const [cuisineFilter, setCuisineFilter] = useState<Record<string, boolean>>({});
+  const normalizeCuisine = (c:string)=> c.trim().toLowerCase();
+  const [cuisineBatchSaving, setCuisineBatchSaving] = useState<boolean>(false);
+  useEffect(() => {
+    // Load disabled items from Supabase
+    (async () => {
+      try {
+        const map = await FoodChooserAPI.getDisabledItems();
+        setCoolOff(map);
+      } catch (e) {
+        // fallback to local cache if present
+        try { const raw = localStorage.getItem('fudi.cooloff.v1'); if (raw) setCoolOff(JSON.parse(raw)); } catch {}
+      }
+    })();
+    // Initialize cuisine filter defaults to all-on
+    const all: Record<string, boolean> = {};
+    meals.forEach(m => { const k = normalizeCuisine(m.cuisine); all[k] = true; });
+    setCuisineFilter(prev => (Object.keys(prev).length ? { ...all, ...prev } : all));
+  }, []);
+  useEffect(() => { localStorage.setItem('fudi.cooloff.v1', JSON.stringify(coolOff)); }, [coolOff]);
+  useEffect(() => {
+    const all: Record<string, boolean> = {};
+    meals.forEach(m => { const k = normalizeCuisine(m.cuisine); if (!(k in all)) all[k] = cuisineFilter[k] ?? true; });
+    setCuisineFilter(prev => ({ ...all, ...prev }));
+  }, [meals]);
+
+  // Spend drilldown modal
+  const [spendOpen, setSpendOpen] = useState(false);
+  const [spendMode, setSpendMode] = useState<'daily'|'monthly'>('daily');
+  const [spendSelection, setSpendSelection] = useState<string | null>(null); // ISO day or YYYY-MM
+  const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
+  const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
+  const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,9 +234,10 @@ export default function App() {
         const savedBudget = { min: prefsData.budget_min, max: prefsData.budget_max };
         setBudgetSaved(savedBudget);
         setForbidRepeatDaysSaved(prefsData.forbid_repeat_days);
-        // sync drafts to saved
         setBudgetDraft({ min: String(savedBudget.min), max: String(savedBudget.max) });
         setForbidRepeatDaysDraft(String(prefsData.forbid_repeat_days));
+        setMonthlyBudgetSaved(prefsData.monthly_budget ?? null);
+        setMonthlyBudgetDraft(prefsData.monthly_budget != null ? String(prefsData.monthly_budget) : '');
       }
       setOverrides(overridesData);
     } catch (err) {
@@ -212,20 +253,24 @@ export default function App() {
     const min = Number(budgetDraft.min);
     const max = Number(budgetDraft.max);
     const days = Number(forbidRepeatDaysDraft);
+    const monthlyBudget = monthlyBudgetDraft.trim() ? Number(monthlyBudgetDraft) : null;
     if (!isFinite(min) || !isFinite(max)) { setPrefsError('Please enter valid numeric min and max.'); return; }
     if (min < 0 || max < 0) { setPrefsError('Min and Max must be non-negative.'); return; }
     if (max < min) { setPrefsError('Max must be greater than or equal to Min.'); return; }
     if (!Number.isInteger(days) || days < 0 || days > 14) { setPrefsError('No repeat within days must be an integer between 0 and 14.'); return; }
+    if (monthlyBudget !== null && (!isFinite(monthlyBudget) || monthlyBudget < 0)) { setPrefsError('Monthly budget must be a non-negative number.'); return; }
     try {
       setPrefsSaving(true);
       const saved = await FoodChooserAPI.upsertUserPreferences({
         budget_min: min,
         budget_max: max,
         forbid_repeat_days: days,
-        strict_budget: true
+        strict_budget: true,
+        monthly_budget: monthlyBudget
       });
       setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
+      setMonthlyBudgetSaved(saved.monthly_budget ?? null);
       setPrefsSavedNotice('Preferences saved.');
     } catch (e) {
       console.error('Failed to save preferences', e);
@@ -237,13 +282,27 @@ export default function App() {
 
   const cuisines = useMemo(()=> [...new Set(meals.map(m=>m.cuisine))], [meals]);
   const wx = pseudoWeatherForDate(todayISO());
-  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides), [meals, budgetSaved, forbidRepeatDaysSaved, overrides]);
+  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat), [meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat]);
   const filteredRecs = recs.filter(r=> r.label.toLowerCase().includes(search.toLowerCase()));
 
   const totalSpend30d = useMemo(()=>{
     const now=Date.now();
     return meals.filter(m=> now - new Date(m.date).getTime() <= 30*86400000).reduce((s,m)=> s+m.cost, 0);
   }, [meals]);
+  function totalSpendMonth(){
+    const d = new Date();
+    const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return meals.filter(m => {
+      const t = new Date(m.date);
+      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
+    }).reduce((s,m)=> s+m.cost, 0);
+  }
+  function budgetBarColor(pct: number){
+    if (pct <= 50) return 'bg-emerald-500';
+    if (pct <= 80) return 'bg-yellow-500';
+    if (pct <= 100) return 'bg-orange-500';
+    return 'bg-red-500';
+  }
   const chartData = useMemo(()=>{
     const days: {day:string; spend:number}[] = [];
     for (let i=13;i>=0;i--){ const d=new Date(Date.now()-i*86400000); const k=d.toISOString().slice(0,10);
@@ -254,45 +313,76 @@ export default function App() {
   }, [meals]);
 
   async function seedDemo(){
-    try { setError(null); for (const meal of seedMeals) { await FoodChooserAPI.addMeal(meal); } await loadData(); }
-    catch (err) { console.error('Error seeding demo data:', err); setError('Failed to load demo data'); }
+    try { for (const meal of seedMeals) { await FoodChooserAPI.addMeal(meal); } await loadData(); }
+    catch (err) { setError('Failed to load demo data'); }
   }
 
   async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){
-    try { setError(null); const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
-    catch (err) { console.error('Error adding meal:', err); setError('Failed to add meal'); }
+    try { const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
+    catch (err) { setError('Failed to add meal'); }
   }
 
-  // For Browse: compute deduped entries by (restaurant, dish) with latest date and latest price (case-insensitive)
-  const browseEntries = useMemo(() => {
-    const byKey = new Map<string, Meal[]>();
-    const normalize = (s: string | null | undefined) => (s ?? '—').trim().toLowerCase();
+  // Weighted random selection among top options
+  function pickWeightedIndex(scores: number[]): number {
+    if (!scores.length) return 0;
+    const max = Math.max(...scores);
+    const weights = scores.map(s => Math.exp((s - max)/8));
+    const sum = weights.reduce((a,b)=> a+b, 0);
+    let t = Math.random()*sum;
+    for (let i=0;i<weights.length;i++){ t -= weights[i]; if (t<=0) return i; }
+    return scores.length - 1;
+  }
+
+  // Ranked meals with cool-off and no-repeat enforcement
+  const rankedMeals = useMemo(() => {
+    const lastByCuisine = new Map<string, number>();
     for (const m of meals) {
-      const key = `${normalize(m.restaurant)}|${normalize(m.dish)}`;
-      if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key)!.push(m);
+      const t = new Date(m.date).getTime();
+      const prev = lastByCuisine.get(m.cuisine) ?? 0;
+      if (t > prev) lastByCuisine.set(m.cuisine, t);
     }
-    const items = Array.from(byKey.entries()).map(([key, list]) => {
-      const sorted = [...list].sort((a,b)=> +new Date(b.date) - +new Date(a.date));
-      const latest = sorted[0];
-      return { key, latest, history: sorted.slice().reverse() };
-    });
-    return items.filter(it => {
-      const q = browseSearch.toLowerCase();
-      if (!q) return true;
-      return (
-        it.latest.dish.toLowerCase().includes(q) ||
-        (it.latest.restaurant ?? '').toLowerCase().includes(q) ||
-        it.latest.cuisine.toLowerCase().includes(q)
-      );
-    });
-  }, [meals, browseSearch]);
+    const normalize = (s: string | null | undefined) => (s ?? '—').trim().toLowerCase();
+    const now = Date.now();
+    const scored = meals
+      .filter(m => m.cost >= budgetSaved.min && m.cost <= budgetSaved.max)
+      .filter(m => {
+        if (!enforceNoRepeat || forbidRepeatDaysSaved === 0) return true;
+        const lastT = lastByCuisine.get(m.cuisine);
+        if (!lastT) return true;
+        const days = Math.floor((now - lastT) / 86400000);
+        return days > forbidRepeatDaysSaved;
+      })
+      .filter(m => !coolOff[`${normalize(m.restaurant)}|${normalize(m.dish)}`])
+      .map(m => { const b = computeMealScoreBreakdown(m, budgetSaved, wx); return { meal: m, score: b.total, breakdown: b }; });
+    const bestByKey = new Map<string, { meal: Meal; score: number; breakdown: ReturnType<typeof computeMealScoreBreakdown> }>();
+    for (const s of scored) {
+      const key = `${normalize(s.meal.restaurant)}|${normalize(s.meal.dish)}`;
+      const prev = bestByKey.get(key);
+      if (!prev || s.score > prev.score) bestByKey.set(key, s);
+    }
+    const deduped = Array.from(bestByKey.values());
+    deduped.sort((a,b) => (b.score !== a.score) ? (b.score - a.score) : (b.meal.cost - a.meal.cost));
+    return deduped;
+  }, [meals, budgetSaved, wx, forbidRepeatDaysSaved, enforceNoRepeat, coolOff]);
+
+  // App pick index consistent across UI and egg
+  const [appPickIdx, setAppPickIdx] = useState<number | null>(null);
+  function computeAppPick() {
+    const top = rankedMeals.slice(0, 5);
+    if (!top.length) { setAppPickIdx(null); return; }
+    const idx = pickWeightedIndex(top.map(t => t.score));
+    setAppPickIdx(idx);
+  }
+  // Recompute app pick when opening choices, or when inputs change
+  useEffect(() => { setAppPickIdx(null); }, [meals, budgetSaved, forbidRepeatDaysSaved, enforceNoRepeat, coolOff]);
 
   function crackEgg(){
     setIsOverride(false);
-    if (!rankedMeals.length){ setPicked(undefined); setEggOpen(true); return; }
-    const top = rankedMeals[0].meal;
-    setPicked({ key: top.id, label: top.cuisine, suggestedRestaurant: top.restaurant ?? undefined, dish: top.dish, estCost: top.cost, score: 0, tier: deriveTier(top.cost) });
+    const top = rankedMeals.slice(0,5);
+    if (!top.length){ setPicked(undefined); setEggOpen(true); return; }
+    const idx = appPickIdx ?? pickWeightedIndex(top.map(t => t.score));
+    const chosen = top[idx].meal;
+    setPicked({ key: chosen.id, label: displayTitle(chosen.cuisine, '—'), suggestedRestaurant: displayTitle(chosen.restaurant, undefined as any), dish: displayTitle(chosen.dish), estCost: chosen.cost, score: 0, tier: deriveTier(chosen.cost) });
     setEggOpen(true);
   }
 
@@ -356,37 +446,6 @@ export default function App() {
     } catch (err) { console.error('Error handling order:', err); setError('Failed to save meal'); }
   }
 
-  // Ranked meals: honor budget strictly and enforce no-repeat within days by cuisine
-  const rankedMeals = useMemo(() => {
-    // Compute last occurrence by cuisine
-    const lastByCuisine = new Map<string, number>();
-    for (const m of meals) {
-      const t = new Date(m.date).getTime();
-      const prev = lastByCuisine.get(m.cuisine) ?? 0;
-      if (t > prev) lastByCuisine.set(m.cuisine, t);
-    }
-    const now = Date.now();
-    const scored = meals
-      .filter(m => m.cost >= budgetSaved.min && m.cost <= budgetSaved.max)
-      .filter(m => {
-        const lastT = lastByCuisine.get(m.cuisine);
-        if (!lastT) return true;
-        const days = Math.floor((now - lastT) / 86400000);
-        return days > forbidRepeatDaysSaved;
-      })
-      .map(m => { const b = computeMealScoreBreakdown(m, budgetSaved, wx); return { meal: m, score: b.total, breakdown: b }; });
-    const bestByKey = new Map<string, { meal: Meal; score: number; breakdown: ReturnType<typeof computeMealScoreBreakdown> }>();
-    const normalize = (s: string | null | undefined) => (s ?? '—').trim().toLowerCase();
-    for (const s of scored) {
-      const key = `${normalize(s.meal.restaurant)}|${normalize(s.meal.dish)}`;
-      const prev = bestByKey.get(key);
-      if (!prev || s.score > prev.score) bestByKey.set(key, s);
-    }
-    const deduped = Array.from(bestByKey.values());
-    deduped.sort((a,b) => (b.score !== a.score) ? (b.score - a.score) : (b.meal.cost - a.meal.cost));
-    return deduped;
-  }, [meals, budgetSaved, wx, forbidRepeatDaysSaved]);
-
   function openScoreHelp() {
     if (!rankedMeals.length) return;
     const top = rankedMeals[0];
@@ -403,9 +462,7 @@ export default function App() {
     setScoreHelpOpen(true);
   }
 
-  // Browse: open detail modal
-  function openBrowseDetail(key: string) { setBrowseDetailKey(key); }
-  function closeBrowseDetail() { setBrowseDetailKey(null); }
+  // Browse detail modal removed
 
   // Browse: add latest entry to dinner history
   async function addBrowseEntryToHistory(key: string) {
@@ -427,7 +484,6 @@ export default function App() {
       try { await FoodChooserAPI.deleteMeal(m.id); } catch (e) { console.error('Failed delete', e); setError('Failed to delete one or more entries'); }
     }
     setMeals(prev => prev.filter(m => !toDelete.some(d => d.id === m.id)));
-    setBrowseDetailKey(null);
   }
 
   // History edit helpers
@@ -486,6 +542,76 @@ export default function App() {
     }
   }
 
+  // For Browse: compute deduped entries by (restaurant, dish) with latest date and latest price (case-insensitive)
+  const browseEntries = useMemo(() => {
+    const byKey = new Map<string, Meal[]>();
+    const normalize = (s: string | null | undefined) => (s ?? '—').trim().toLowerCase();
+    for (const m of meals) {
+      const key = `${normalize(m.restaurant)}|${normalize(m.dish)}`;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push(m);
+    }
+    const items = Array.from(byKey.entries()).map(([key, list]) => {
+      const sorted = [...list].sort((a,b)=> +new Date(b.date) - +new Date(a.date));
+      const latest = sorted[0];
+      return { key, latest, history: sorted.slice().reverse() };
+    });
+    return items.filter(it => {
+      const q = browseSearch.toLowerCase();
+      if (!q) return true;
+      return (
+        it.latest.dish.toLowerCase().includes(q) ||
+        (it.latest.restaurant ?? '').toLowerCase().includes(q) ||
+        it.latest.cuisine.toLowerCase().includes(q)
+      );
+    });
+  }, [meals, browseSearch]);
+
+  async function toggleDisabledKey(normKey: string) {
+    const [r, d] = normKey.split('|');
+    const next = !coolOff[normKey];
+    // optimistic update
+    setCoolOff(prev => ({ ...prev, [normKey]: next }));
+    setCoolSavingKey(normKey);
+    try {
+      await FoodChooserAPI.setDisabledItem(r, d, next);
+      // re-fetch from Supabase to ensure persistence
+      const latest = await FoodChooserAPI.getDisabledItems();
+      setCoolOff(latest);
+    } catch (e) {
+      // rollback on failure
+      setCoolOff(prev => ({ ...prev, [normKey]: !next }));
+    } finally {
+      setCoolSavingKey(null);
+    }
+  }
+
+  async function setDisabledForCuisine(selectedCuisineKeys: string[], disabled: boolean) {
+    // Collect all normalized item keys under selected cuisines
+    const selectedSet = new Set(selectedCuisineKeys.map(k => normalizeCuisine(k)));
+    const itemKeys = browseEntries
+      .filter(e => selectedSet.has(normalizeCuisine(e.latest.cuisine ?? '')))
+      .map(e => e.key);
+    if (!itemKeys.length) return;
+    setCuisineBatchSaving(true);
+    try {
+      // optimistic bulk update
+      setCoolOff(prev => {
+        const nextMap = { ...prev };
+        for (const key of itemKeys) nextMap[key] = disabled;
+        return nextMap;
+      });
+      for (const key of itemKeys) {
+        const [r, d] = key.split('|');
+        await FoodChooserAPI.setDisabledItem(r, d, disabled);
+      }
+      const latest = await FoodChooserAPI.getDisabledItems();
+      setCoolOff(latest);
+    } finally {
+      setCuisineBatchSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
@@ -509,7 +635,12 @@ export default function App() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="flex items-center gap-2"><Sparkles className="h-6 w-6" /><h1 className="text-2xl font-bold md:text-3xl">FuDi</h1></div>
+          <div className="flex items-center gap-2">
+            {/* Project icon if present */}
+            <img src="/logo.png" alt="FuDi" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
+            <Sparkles className="h-6 w-6" />
+            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
+          </div>
           <p className="text-sm text-zinc-600">Smart, fun dinner picks — personalized by mood, budget, and weather.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -525,41 +656,105 @@ export default function App() {
           <div className="text-sm font-semibold mb-2">Browse Meals</div>
           <div className="mt-1 flex items-center gap-2">
             <input className="input" placeholder="Search dish, restaurant, cuisine" value={browseSearch} onChange={e=> setBrowseSearch(e.target.value)} />
-            <button className="btn-ghost" onClick={()=> setBrowseSearch('')}><Filter className="h-4 w-4"/></button>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {browseEntries.map(e => (
-              <div key={e.key} className="card p-5 hover:shadow transition">
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
+            {/* Side Filters */}
+            <div className="rounded-xl border p-4 text-sm">
+              <div className="mb-2 font-semibold">Filter by cuisine</div>
+              <div className="mb-1 text-xs text-zinc-600">Show only selected cuisines</div>
+              <div className="max-h-40 overflow-auto pr-1">
+                {Array.from(new Set(meals.map(m => m.cuisine.trim()))).sort().map(c => {
+                  const key = normalizeCuisine(c);
+                  const on = cuisineFilter[key] !== false;
+                  return (
+                    <label key={c} className="mb-1 flex items-center justify-between gap-2">
+                      <span>{c}</span>
+                      <input type="checkbox" checked={on} onChange={e=> setCuisineFilter(prev => ({ ...prev, [key]: e.target.checked }))} />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-3 text-xs text-zinc-600">
+                Tip: These checkboxes only filter what you see. Use the actions below to disable/enable all dishes in the selected cuisines from being recommended.
+              </div>
+              <div className="mt-2 flex flex-col gap-2">
+                <button
+                  className="btn-ghost"
+                  title="Disable all dishes that belong to the checked cuisines"
+                  onClick={()=> {
+                    const selected = Object.entries(cuisineFilter).filter(([,on])=> on !== false).map(([k])=> k);
+                    setDisabledForCuisine(selected, true);
+                  }}
+                  disabled={cuisineBatchSaving}
+                >
+                  {cuisineBatchSaving ? 'Working…' : 'Disable all selected cuisines'}
+                </button>
+                <button
+                  className="btn-ghost"
+                  title="Enable all dishes that belong to the checked cuisines"
+                  onClick={()=> {
+                    const selected = Object.entries(cuisineFilter).filter(([,on])=> on !== false).map(([k])=> k);
+                    setDisabledForCuisine(selected, false);
+                  }}
+                  disabled={cuisineBatchSaving}
+                >
+                  {cuisineBatchSaving ? 'Working…' : 'Enable all selected cuisines'}
+                </button>
+              </div>
+            </div>
+            {/* Items */}
+            <div className="md:col-span-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {browseEntries.filter(e => {
+                const key = normalizeCuisine(e.latest.cuisine ?? '');
+                const on = cuisineFilter[key] !== false; return on;
+              }).map((e) => {
+              const normKey = e.key; // already normalized
+              const isOff = !!coolOff[normKey];
+              return (
+              <div key={e.key} className={`card p-5 hover:shadow transition ${isOff ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold cursor-pointer" onClick={()=> openBrowseDetail(e.key)}>{displayTitle(e.latest.dish)}</div>
+                  <div className="font-semibold">{displayTitle(e.latest.dish)}</div>
                   <span className="badge">{e.latest.rating ?? '—'}★</span>
                 </div>
                 <div className="text-sm text-zinc-600">{displayTitle(e.latest.restaurant)} • {displayTitle(e.latest.cuisine, '—')}</div>
                 <div className="text-sm text-zinc-600">Latest: {currency(e.latest.cost)} • {new Date(e.latest.date).toISOString().slice(0,10)}</div>
-                <div className="mt-3 flex justify-end gap-2">
-                  <button className="btn-ghost" onClick={()=> openBrowseDetail(e.key)}>View price history</button>
-                  <button className="btn-ghost inline-flex items-center gap-1 text-red-600" onClick={()=> deleteBrowseGroup(e.key)}><Trash2 className="h-4 w-4"/> Delete</button>
+                <div className="mt-3 flex flex-wrap justify-end gap-2">
+                  <button className="btn-ghost" onClick={()=> setBrowseDetailKey(e.key)}>View price history</button>
+                  <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: e.key, label: displayTitle(e.latest.cuisine, '—'), suggestedRestaurant: displayTitle(e.latest.restaurant, undefined as any), dish: displayTitle(e.latest.dish), estCost: e.latest.cost, score: 0, tier: deriveTier(e.latest.cost) }); setEggOpen(true); }}>Select</button>
+                  <button
+                    className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100' : 'hover:bg-zinc-50'}`}
+                    onClick={()=> toggleDisabledKey(normKey)}
+                    title={isOff ? 'Enable: allow this dish to be recommended again' : 'Disable: prevent this dish from being recommended until re-enabled'}
+                    disabled={coolSavingKey === normKey}
+                  >
+                    {coolSavingKey === normKey ? 'Saving…' : (isOff ? 'Enable' : 'Disable')}
+                  </button>
                 </div>
               </div>
-            ))}
+            );})}
+            </div>
           </div>
         </div>
       ) : (
         <>
-          {/* Controls */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="card p-5">
-              <div className="text-sm font-semibold mb-1">Budget</div>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <div className="label">Min</div>
+      {/* Controls */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="card p-5">
+          <div className="text-sm font-semibold mb-1">Budget</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <div className="label">Min</div>
                   <input className="input" type="number" value={budgetDraft.min} onChange={e=> setBudgetDraft(prev=> ({...prev, min: e.target.value}))} />
-                </div>
-                <div>
-                  <div className="label">Max</div>
+            </div>
+            <div>
+              <div className="label">Max</div>
                   <input className="input" type="number" value={budgetDraft.max} onChange={e=> setBudgetDraft(prev=> ({...prev, max: e.target.value}))} />
-                </div>
-              </div>
+            </div>
+          </div>
+              <label className="mt-1 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={enforceNoRepeat} onChange={e=> setEnforceNoRepeat(e.target.checked)} />
+                Enforce no-repeat window
+          </label>
               <div className="mt-1 text-xs text-zinc-600">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
               <div className="mt-3 text-sm font-semibold">Egg tiers</div>
               <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
@@ -574,10 +769,10 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div className="mt-3 text-sm">No repeat within (days)</div>
+          <div className="mt-3 text-sm">No repeat within (days)</div>
               <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e=> setForbidRepeatDaysDraft(e.target.value)}>
                 {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n}</option>)}
-              </select>
+          </select>
               {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
               {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
               <div className="mt-3 flex justify-end gap-2">
@@ -594,88 +789,176 @@ export default function App() {
                 </button>
                 <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
               </div>
-            </div>
+        </div>
 
-            <div className="card p-5">
+        <div className="card p-5">
               <div className="text-sm font-semibold mb-1">Today's Context</div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-3 gap-4 text-sm">
                 <div><div className="label">Condition</div><div className="text-lg font-semibold capitalize">{wx.condition}</div></div>
                 <div><div className="label">Temp</div><div className="text-lg font-semibold">{wx.tempF}°F</div></div>
-                <div><div className="label">30d Spend</div><div className="text-lg font-semibold">{currency(totalSpend30d)}</div></div>
-              </div>
-              <div className="mt-4 h-[120px]">
-                <ResponsiveContainer width="100%" height="100%">
+            <div>
+              <div className="label">30d Spend</div>
+                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendMode('daily'); setSpendSelection(null); setSpendOpen(true); }}>{currency(totalSpend30d)}</button>
+            </div>
+          </div>
+          <div className="mt-4 h-[120px]">
+            <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" hide /><YAxis hide /><Tooltip /><Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} /></LineChart>
-                </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
+              {/* Monthly budget summary placed below chart for more space */}
+              <div className="mt-5">
+                <div className="flex items-center justify-between">
+                  <div className="label">Monthly budget</div>
+                  {!monthlyBudgetEdit && (
+                    <button className="btn-ghost" onClick={()=> { setMonthlyBudgetEdit(true); }}>Edit</button>
+                  )}
+                </div>
+                {monthlyBudgetEdit ? (
+                  <div className="mt-1 flex items-center gap-2">
+                    <input className="input w-32" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e=> setMonthlyBudgetDraft(e.target.value)} />
+                    <button className="btn-primary" onClick={async ()=> { setPrefsError(null); setPrefsSavedNotice(null); await savePreferences(); setMonthlyBudgetEdit(false); }}>Save</button>
+                    <button className="btn-ghost" onClick={()=> { setMonthlyBudgetDraft(monthlyBudgetSaved != null ? String(monthlyBudgetSaved) : ''); setMonthlyBudgetEdit(false); }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-sm text-zinc-700">{monthlyBudgetSaved != null && monthlyBudgetSaved > 0 ? currency(monthlyBudgetSaved) : 'Not set'}</div>
+                )}
+                {monthlyBudgetSaved !== null && monthlyBudgetSaved > 0 && (
+                  (()=>{
+                    const spent = totalSpendMonth();
+                    const remaining = Math.max(0, monthlyBudgetSaved - spent);
+                    const pct = Math.min(100, Math.round((spent / monthlyBudgetSaved) * 100));
+                    const bar = budgetBarColor(pct);
+                    return (
+                      <div className="mt-3">
+                        <div className="grid gap-3 sm:grid-cols-3 text-xs">
+                          <div className="rounded border p-3"><div className="text-zinc-600">Total</div><div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div></div>
+                          <div className="rounded border p-3"><div className="text-zinc-600">Spent MTD</div><div className="text-base font-semibold">{currency(spent)}</div></div>
+                          <div className="rounded border p-3"><div className="text-zinc-600">Remaining</div><div className={`text-base font-semibold ${spent>monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700'}`}>{currency(Math.max(0, remaining))}</div></div>
+                        </div>
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-xs text-zinc-600">
+                            <span>Usage</span>
+                            <span>{pct}%</span>
+                          </div>
+                          <div className="mt-1 h-2 w-full rounded bg-zinc-200">
+                            <div className={`h-2 rounded ${bar}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
-            </div>
+        </div>
 
-            <div className="card p-5">
-              <div className="text-sm font-semibold mb-1">Quick Filters</div>
-              <div className="label">Search cuisines</div>
+        <div className="card p-5">
+          <div className="text-sm font-semibold mb-1">Quick Filters</div>
+          <div className="label">Search cuisines</div>
               <div className="mt-1 flex items-center gap-2"><input className="input" placeholder="e.g., Mexican, Ramen…" value={search} onChange={e=> setSearch(e.target.value)} /><button className="btn-ghost" onClick={()=> setSearch('')}><Filter className="h-4 w-4"/></button></div>
-              <p className="mt-2 text-xs text-zinc-600">Tip: Load demo data, tweak budget, then crack the egg.</p>
-            </div>
+          <p className="mt-2 text-xs text-zinc-600">Tip: Load demo data, tweak budget, then crack the egg.</p>
+        </div>
+      </div>
+
+          {/* Log a Dinner */}
+      <div className="card p-5">
+        <div className="text-sm font-semibold mb-3">Log a Dinner</div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <div className="label">Date</div>
+                <input className="input" type="datetime-local" value={new Date(date).toISOString().slice(0,16)} onChange={e=> setDate(new Date(e.target.value).toISOString().slice(0,10))} />
+          </div>
+          <div>
+            <div className="label">Cost (USD)</div>
+            <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
+          </div>
+          <div>
+            <div className="label">Cuisine</div>
+            <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
+            <datalist id="cuisine-list">
+              {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
+            </datalist>
+          </div>
+          <div>
+            <div className="label">Restaurant</div>
+                <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
+                <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
+          </div>
+          <div>
+            <div className="label">Dish</div>
+                <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
+                <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
+          </div>
+          <div>
+            <div className="label">Rating (1-5)</div>
+            <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
+          </div>
+          <div className="md:col-span-2 lg:col-span-3">
+            <div className="label">Notes</div>
+            <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
+          </div>
+        </div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
           </div>
 
           {/* Reveal Choices (Order Section) */}
           <div className="card p-5">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">Top choices for you</div>
-              <div className="flex items-center gap-2"><button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}><Info className="h-4 w-4"/> Explain</button><button className="btn-ghost" onClick={()=> setOrderOpen(o=>!o)}>{orderOpen ? 'Hide' : 'Reveal Choices'}</button></div>
+              <div className="flex items-center gap-2"><button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}><Info className="h-4 w-4"/> Explain</button><button className="btn-ghost" onClick={()=> { const next = !orderOpen; setOrderOpen(next); if (next) computeAppPick(); }}>{orderOpen ? 'Hide' : 'Reveal Choices'}</button></div>
             </div>
-            <div className="mt-1 text-xs text-zinc-600">Note: The first item here is exactly what the mystery egg will reveal.</div>
+            <div className="mt-1 text-xs text-zinc-600">Note: The app randomly selects among these top options proportional to their scores. The highlighted one is what the mystery egg will reveal.</div>
             {orderOpen && (
               <div className="mt-3 space-y-2">
                 {rankedMeals.slice(0,5).map((s, idx) => (
-                  <div key={s.meal.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div key={s.meal.id} className={`flex items-center justify-between rounded-lg border p-3 ${appPickIdx===idx ? 'bg-amber-50' : ''}`}>
                     <div>
-                      <div className="flex items-center gap-2">{idx===0 && <span className="badge">Chosen</span>}<div className="font-medium">{displayTitle(s.meal.dish)} <span className="text-zinc-500">• {displayTitle(s.meal.cuisine, '—')}</span></div></div>
+                      <div className="flex items-center gap-2">{appPickIdx===idx && <span className="badge">Chosen</span>}<div className="font-medium">{displayTitle(s.meal.dish)} <span className="text-zinc-500">• {displayTitle(s.meal.cuisine, '—')}</span></div></div>
                       <div className="text-xs text-zinc-600">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
                     </div>
                     <button className="btn-primary" onClick={()=> { setIsOverride(true); setPicked({ key: s.meal.id, label: displayTitle(s.meal.cuisine, '—'), suggestedRestaurant: displayTitle(s.meal.restaurant, undefined as any), dish: displayTitle(s.meal.dish), estCost: s.meal.cost, score: 0, tier: deriveTier(s.meal.cost) }); setEggOpen(true); }}>Select</button>
                   </div>
                 ))}
-              </div>
+        </div>
             )}
-          </div>
+      </div>
 
-          {/* Recommendations */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Recommendations</div>
-              <div className="text-xs text-zinc-600">{filteredRecs.length} options</div>
-            </div>
-            {filteredRecs.length ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredRecs.map(r => (
-                  <div key={r.key} className="card p-5 hover:shadow-lg transition">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="badge">{r.tier}</span>
+      {/* Recommendations */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold">Recommendations</div>
+          <div className="text-xs text-zinc-600">{filteredRecs.length} options</div>
+        </div>
+        {filteredRecs.length ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredRecs.map(r => (
+              <div key={r.key} className="card p-5 hover:shadow-lg transition">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="badge">{r.tier}</span>
                         <div className="font-semibold">{displayTitle(r.label, '—')}</div>
-                      </div>
-                      <span className="badge border-zinc-300">{currency(r.estCost)}</span>
-                    </div>
-                    <div className="mt-2 text-sm text-zinc-600">Score {Math.round(r.score)}</div>
+                  </div>
+                  <span className="badge border-zinc-300">{currency(r.estCost)}</span>
+                </div>
+                <div className="mt-2 text-sm text-zinc-600">Score {Math.round(r.score)}</div>
                     <div className="mt-2 text-sm">Latest: <span className="font-medium">{r.suggestedRestaurant ? displayTitle(r.suggestedRestaurant) : "Chef's Choice"}</span></div>
                     <div className="text-sm text-zinc-600">Dish: {r.dish ? displayTitle(r.dish) : 'Signature'}</div>
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        className="btn-primary"
+                <div className="mt-3 flex justify-end">
+                  <button
+                    className="btn-primary"
                         onClick={() => { setIsOverride(true); setPicked({ ...r, label: displayTitle(r.label, '—'), suggestedRestaurant: r.suggestedRestaurant ? displayTitle(r.suggestedRestaurant) : undefined, dish: r.dish ? displayTitle(r.dish) : undefined }); setEggOpen(true); }}
-                        title="Override the algorithm with this pick"
-                      >
-                        Choose Meal
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                    title="Override the algorithm with this pick"
+                  >
+                    Choose Meal
+                  </button>
+                </div>
               </div>
-            ) : (
-              <div className="card p-8 text-center text-sm text-zinc-600">No recommendations yet. Log a dinner or load demo data.</div>
-            )}
+            ))}
           </div>
+        ) : (
+          <div className="card p-8 text-center text-sm text-zinc-600">No recommendations yet. Log a dinner or load demo data.</div>
+        )}
+      </div>
         </>
       )}
 
@@ -690,12 +973,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Browse detail modal with price history */}
+      {/* Browse price history modal */}
       {browseDetailKey && (() => {
-        const entry = browseEntries.find(e => e.key === browseDetailKey)!;
-        const chart = entry.history.map(h => ({ date: new Date(h.date).toISOString().slice(0,10), price: h.cost }));
+        const entry = browseEntries.find((e) => e.key === browseDetailKey)!;
+        const chart = entry.history.map((h) => ({ date: new Date(h.date).toISOString().slice(0,10), price: h.cost }));
         return (
-          <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={closeBrowseDetail}>
+          <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setBrowseDetailKey(null)}>
             <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-lg font-semibold">{displayTitle(entry.latest.dish)}</div>
@@ -713,12 +996,9 @@ export default function App() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-4 flex justify-between gap-2">
-                <button className="btn-ghost text-red-600 inline-flex items-center gap-1" onClick={async ()=> { await deleteBrowseGroup(browseDetailKey); }}><Trash2 className="h-4 w-4"/> Delete</button>
-                <div className="ml-auto flex gap-2">
-                  <button className="btn-ghost" onClick={closeBrowseDetail}>Close</button>
-                  <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); closeBrowseDetail(); }}>Add to Dinner History</button>
-                </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button className="btn-ghost" onClick={()=> setBrowseDetailKey(null)}>Close</button>
+                <button className="btn-primary" onClick={async ()=> { await addBrowseEntryToHistory(browseDetailKey); setBrowseDetailKey(null); }}>Add to Dinner History</button>
               </div>
             </div>
           </div>
@@ -766,6 +1046,79 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Spend drilldown modal */}
+      {spendOpen && (() => {
+        // Build daily (last 180 days) and monthly (last 12 months) datasets
+        const today = new Date();
+        const dayData: { day: string; spend: number }[] = [];
+        for (let i=179;i>=0;i--) {
+          const d=new Date(today.getTime()-i*86400000); const iso=d.toISOString().slice(0,10);
+          const spend = meals.filter(m=> m.date.slice(0,10)===iso).reduce((s,m)=> s+m.cost, 0);
+          dayData.push({ day: iso, spend: Math.round(spend*100)/100 });
+        }
+        const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const monthMap = new Map<string, number>();
+        for (const m of meals) {
+          const k = monthKey(new Date(m.date));
+          monthMap.set(k, (monthMap.get(k) ?? 0) + m.cost);
+        }
+        const sortedMonths = Array.from(monthMap.entries()).sort(([a],[b])=> a<b? -1:1).slice(-12);
+        const monthData = sortedMonths.map(([k,v])=> ({ month: k, spend: Math.round(v*100)/100 }));
+        const selectionLabel = spendMode==='daily' ? (spendSelection ?? 'Select a day') : (spendSelection ?? 'Select a month');
+        const contributingMeals = spendSelection ? meals.filter(m => (spendMode==='daily' ? m.date.slice(0,10)===spendSelection : monthKey(new Date(m.date))===spendSelection)) : [];
+        return (
+          <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
+            <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-lg font-semibold">Eating-out Spend</div>
+                <div className="flex gap-2">
+                  <button className={`btn-ghost ${spendMode==='daily'?'border':''}`} onClick={()=> { setSpendMode('daily'); setSpendSelection(null); }}>Daily</button>
+                  <button className={`btn-ghost ${spendMode==='monthly'?'border':''}`} onClick={()=> { setSpendMode('monthly'); setSpendSelection(null); }}>Monthly</button>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {spendMode==='daily' ? (
+                      <LineChart data={dayData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="day" tickFormatter={(v)=> v.slice(5)} />
+                        <YAxis />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    ) : (
+                      <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="spend" />
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold mb-2">{selectionLabel}</div>
+                  <div className="max-h-[220px] overflow-auto">
+                    {contributingMeals.length ? contributingMeals.sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
+                      <div key={m.id} className="flex items-center justify-between border-b py-2 text-sm">
+                        <div>
+                          <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
+                          <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
+                        </div>
+                        <div className="font-semibold">{currency(m.cost)}</div>
+                      </div>
+                    )) : <div className="text-sm text-zinc-600">Select a {spendMode==='daily' ? 'day' : 'month'} to see details.</div>}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end"><button className="btn-primary" onClick={()=> setSpendOpen(false)}>Close</button></div>
+            </div>
+          </div>
+        );
+      })()}
 
       <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Dinner History"} />
 

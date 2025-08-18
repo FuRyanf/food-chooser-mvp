@@ -71,6 +71,7 @@ export interface Database {
           budget_max: number
           forbid_repeat_days: number
           strict_budget: boolean
+          monthly_budget: number | null
           created_at: string
           updated_at: string
         }
@@ -81,6 +82,7 @@ export interface Database {
           budget_max: number
           forbid_repeat_days: number
           strict_budget: boolean
+          monthly_budget?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -91,6 +93,7 @@ export interface Database {
           budget_max?: number
           forbid_repeat_days?: number
           strict_budget?: boolean
+          monthly_budget?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -117,6 +120,35 @@ export interface Database {
           user_id?: string
           cuisine?: string
           count?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      disabled_items: {
+        Row: {
+          id: string
+          user_id: string
+          restaurant_norm: string
+          dish_norm: string
+          disabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          restaurant_norm: string
+          dish_norm: string
+          disabled: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          restaurant_norm?: string
+          dish_norm?: string
+          disabled?: boolean
           created_at?: string
           updated_at?: string
         }
