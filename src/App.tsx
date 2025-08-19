@@ -184,6 +184,12 @@ export default function App() {
   const [cuisineFilter, setCuisineFilter] = useState<Record<string, boolean>>({});
   const normalizeCuisine = (c:string)=> c.trim().toLowerCase();
   const [cuisineBatchSaving, setCuisineBatchSaving] = useState<boolean>(false);
+  // Groceries state
+  type Grocery = Database['public']['Tables']['groceries']['Row'];
+  const [groceries, setGroceries] = useState<Grocery[]>([]);
+  const [gDate, setGDate] = useState<string>(todayISO());
+  const [gAmount, setGAmount] = useState<string>('50');
+  const [gNotes, setGNotes] = useState<string>('');
   useEffect(() => {
     // Load disabled items from Supabase
     (async () => {
@@ -279,12 +285,14 @@ export default function App() {
     try {
       setLoading(true);
       setError(null);
-      const [mealsData, prefsData, overridesData] = await Promise.all([
+      const [mealsData, prefsData, overridesData, groceriesData] = await Promise.all([
         FoodChooserAPI.getMeals(),
         FoodChooserAPI.getUserPreferences(),
-        FoodChooserAPI.getOverridesMap()
+        FoodChooserAPI.getOverridesMap(),
+        FoodChooserAPI.getGroceries()
       ]);
       setMeals(mealsData);
+      setGroceries(groceriesData);
       if (prefsData) {
         const savedBudget = { min: prefsData.budget_min, max: prefsData.budget_max };
         setBudgetSaved(savedBudget);
@@ -396,6 +404,14 @@ export default function App() {
       const t = new Date(m.date);
       return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
     }).reduce((s,m)=> s+m.cost, 0);
+  }
+  function totalGroceryMonth(){
+    const d = new Date();
+    const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return groceries.filter(g => {
+      const t = new Date(g.date);
+      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
+    }).reduce((s,g)=> s+g.amount, 0);
   }
   function budgetBarColor(pct: number){
     if (pct <= 50) return 'bg-emerald-500';
@@ -933,7 +949,9 @@ export default function App() {
                 </div>
                 {monthlyBudgetSaved !== null && monthlyBudgetSaved > 0 && (
                   (()=>{
-                    const spent = totalSpendMonth();
+                    const spentMeals = totalSpendMonth();
+                    const spentGroceries = totalGroceryMonth();
+                    const spent = spentMeals + spentGroceries;
                     const remaining = Math.max(0, monthlyBudgetSaved - spent);
                     const pct = Math.min(100, Math.round((spent / monthlyBudgetSaved) * 100));
                     const bar = budgetBarColor(pct);
@@ -941,7 +959,7 @@ export default function App() {
                       <div className="mt-3">
                         <div className="grid gap-3 sm:grid-cols-3 text-xs">
                           <div className="rounded border p-3"><div className="text-zinc-600">Total</div><div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div></div>
-                          <div className="rounded border p-3"><div className="text-zinc-600">Spent MTD</div><div className="text-base font-semibold">{currency(spent)}</div></div>
+                          <div className="rounded border p-3"><div className="text-zinc-600">Spent MTD</div><div className="text-base font-semibold">{currency(spent)}</div><div className="mt-1 text-[11px] text-zinc-600">Meals: {currency(spentMeals)} • Groceries: {currency(spentGroceries)}</div></div>
                           <div className="rounded border p-3"><div className="text-zinc-600">Remaining</div><div className={`text-base font-semibold ${spent>monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700'}`}>{currency(Math.max(0, remaining))}</div></div>
                         </div>
                         <div className="mt-2">
@@ -949,9 +967,11 @@ export default function App() {
                             <span>Usage</span>
                             <span>{pct}%</span>
                           </div>
-                          <div className="mt-1 h-2 w-full rounded bg-zinc-200">
-                            <div className={`h-2 rounded ${bar}`} style={{ width: `${pct}%` }} />
+                          <div className="mt-1 h-2 w-full rounded bg-zinc-200 relative overflow-hidden">
+                            <div className={`h-2 absolute left-0 top-0 bg-emerald-500`} style={{ width: `${Math.min(100, Math.round((spentMeals / monthlyBudgetSaved) * 100))}%` }} />
+                            <div className={`h-2 absolute left-0 top-0 bg-blue-500`} style={{ width: `${Math.min(100, Math.round(((spentMeals + spentGroceries) / monthlyBudgetSaved) * 100))}%`, opacity: 0.6 }} />
                           </div>
+                          <div className="mt-1 flex justify-end gap-3 text-[11px] text-zinc-600"><span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-emerald-500"></span> Meals</span><span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-blue-500 opacity-60"></span> Groceries</span></div>
                         </div>
                       </div>
                     );
@@ -1030,6 +1050,51 @@ export default function App() {
                 ))}
         </div>
             )}
+      </div>
+
+      {/* Groceries */}
+      <div className="card p-5">
+        <div className="text-sm font-semibold mb-3">Log a Grocery</div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <div className="label">Date</div>
+            <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
+          </div>
+          <div>
+            <div className="label">Amount (USD)</div>
+            <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
+          </div>
+          <div>
+            <div className="label">Notes</div>
+            <input className="input" value={gNotes} onChange={e=> setGNotes(e.target.value)} placeholder="e.g., Trader Joe's" />
+          </div>
+        </div>
+        <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
+          const amt = Number(gAmount) || 0;
+          if (amt <= 0) { showToast('Enter a valid amount'); return; }
+          await FoodChooserAPI.addGrocery({ date: new Date(gDate).toISOString(), amount: amt, notes: gNotes || null });
+          const latest = await FoodChooserAPI.getGroceries();
+          setGroceries(latest);
+          setGDate(todayISO()); setGAmount('50'); setGNotes('');
+          showToast('Grocery saved');
+        }}>Save Grocery</button></div>
+        <div className="mt-4">
+          <div className="text-sm font-semibold mb-1">Grocery History</div>
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Notes</th><th className="th text-right">Amount</th></tr></thead>
+              <tbody>
+                {groceries.slice(0,10).map(g => (
+                  <tr key={g.id} className="hover:bg-zinc-50">
+                    <td className="td">{g.date.slice(0,10)}</td>
+                    <td className="td">{g.notes ?? '—'}</td>
+                    <td className="td text-right">{currency(g.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Recommendations removed per request to simplify Home */}

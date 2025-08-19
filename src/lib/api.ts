@@ -14,6 +14,9 @@ type CuisineOverrideInsert = Database['public']['Tables']['cuisine_overrides']['
 type DisabledItem = Database['public']['Tables']['disabled_items']['Row']
 type DisabledItemInsert = Database['public']['Tables']['disabled_items']['Insert']
 
+type Grocery = Database['public']['Tables']['groceries']['Row']
+type GroceryInsert = Database['public']['Tables']['groceries']['Insert']
+
 // For now, we'll use a simple user ID. In a real app, you'd implement proper auth
 const DEMO_USER_ID = 'demo-user-123'
 
@@ -41,6 +44,30 @@ export class FoodChooserAPI {
     }
 
     return data || []
+  }
+  // Groceries
+  static async getGroceries(): Promise<Grocery[]> {
+    checkSupabase()
+    const { data, error } = await supabase!
+      .from('groceries')
+      .select('*')
+      .eq('user_id', DEMO_USER_ID)
+      .order('date', { ascending: false })
+    if (error) throw error
+    return data || []
+  }
+
+  static async addGrocery(g: Omit<GroceryInsert, 'user_id' | 'created_at' | 'updated_at'>): Promise<Grocery> {
+    checkSupabase()
+    const now = new Date().toISOString()
+    const row: GroceryInsert = { ...g, user_id: DEMO_USER_ID, created_at: now, updated_at: now }
+    const { data, error } = await supabase!
+      .from('groceries')
+      .insert(row)
+      .select()
+      .single()
+    if (error) throw error
+    return data
   }
 
   static async addMeal(meal: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>): Promise<Meal> {

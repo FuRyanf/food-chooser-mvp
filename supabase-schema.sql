@@ -8,13 +8,14 @@
 CREATE TABLE IF NOT EXISTS public.meals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id TEXT NOT NULL,
-    date DATE NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
     restaurant TEXT,
     dish TEXT NOT NULL,
     cuisine TEXT NOT NULL,
     cost DECIMAL(10,2) NOT NULL CHECK (cost >= 0),
     rating INTEGER CHECK (rating >= 1 AND rating <= 5),
     notes TEXT,
+    seed_only BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.cuisine_overrides (
 CREATE INDEX IF NOT EXISTS idx_meals_user_id ON public.meals(user_id);
 CREATE INDEX IF NOT EXISTS idx_meals_date ON public.meals(date);
 CREATE INDEX IF NOT EXISTS idx_meals_cuisine ON public.meals(cuisine);
+CREATE INDEX IF NOT EXISTS idx_meals_seed_only ON public.meals(seed_only);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON public.user_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_cuisine_overrides_user_id ON public.cuisine_overrides(user_id);
 
@@ -126,3 +128,25 @@ CREATE POLICY IF NOT EXISTS "Allow all operations for demo user" ON public.disab
     FOR ALL USING (user_id = 'demo-user-123');
 
 GRANT ALL ON public.disabled_items TO anon, authenticated;
+
+-- Groceries table
+CREATE TABLE IF NOT EXISTS public.groceries (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    amount DECIMAL(10,2) NOT NULL CHECK (amount >= 0),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_groceries_user_date ON public.groceries(user_id, date DESC);
+
+CREATE TRIGGER update_groceries_updated_at BEFORE UPDATE ON public.groceries
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+ALTER TABLE public.groceries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all operations for demo user" ON public.groceries
+    FOR ALL USING (user_id = 'demo-user-123');
+
+GRANT ALL ON public.groceries TO anon, authenticated;
