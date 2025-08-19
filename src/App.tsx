@@ -1097,50 +1097,13 @@ export default function App() {
               setGDate(todayISO()); setGAmount('50'); setGNotes('');
               showToast('Grocery trip saved');
             }}>Save Trip</button></div>
-            <div className="mt-4">
-              <div className="text-sm font-semibold mb-1">Grocery Trip History</div>
-              <div className="overflow-x-auto">
-                <table className="table">
-                  <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Notes</th><th className="th text-right">Amount</th></tr></thead>
-                  <tbody>
-                    {groceries.slice(0,10).map(g => (
-                      <tr key={g.id} className="hover:bg-zinc-50">
-                        <td className="td">{g.date.slice(0,10)}</td>
-                        <td className="td">{g.notes ?? '—'}</td>
-                        <td className="td text-right">{currency(g.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </>
         )}
-      </div>
-
-      {/* Recommendations removed per request to simplify Home */}
-
-      {/* Scoring explain modal */}
-      {scoreHelpOpen && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
-            <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> How we ranked your top choice</div>
-            <pre className="whitespace-pre-wrap rounded bg-zinc-50 p-3 text-sm text-zinc-800">{scoreHelpText}</pre>
-            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>Close</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* History (Meal | Grocery Trip) */}
-      {activeTab === 'home' && (
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
+        {/* Shared History section */}
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-semibold">History</div>
-            <div className="flex items-center gap-2">
-              <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>Meal</button>
-              <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>Grocery Trip</button>
-              <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button>
-            </div>
+            <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button>
           </div>
           <div className="overflow-x-auto">
             {logTab==='meal' ? (
@@ -1183,7 +1146,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(showAllHistory ? groceries : groceries.slice(0,10)).map(g => (
+                  {(showAllHistory ? groceries : groceries.slice(0,5)).map(g => (
                     <tr key={g.id} className="hover:bg-zinc-50">
                       <td className="td">{g.date.slice(0,10)}</td>
                       <td className="td">{g.notes ?? '—'}</td>
@@ -1195,7 +1158,22 @@ export default function App() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Recommendations removed per request to simplify Home */}
+
+      {/* Scoring explain modal */}
+      {scoreHelpOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+            <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> How we ranked your top choice</div>
+            <pre className="whitespace-pre-wrap rounded bg-zinc-50 p-3 text-sm text-zinc-800">{scoreHelpText}</pre>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>Close</button></div>
+          </div>
+        </div>
       )}
+
+      {/* (Removed) Separate bottom History card; History now lives under Log card */}
 
       {/* Edit history modal */}
       {editMeal && (
