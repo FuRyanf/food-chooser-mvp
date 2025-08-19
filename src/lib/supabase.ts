@@ -33,6 +33,7 @@ export interface Database {
           cost: number
           rating: number | null
           notes: string | null
+          seed_only: boolean
           created_at: string
           updated_at: string
         }
@@ -46,6 +47,7 @@ export interface Database {
           cost: number
           rating?: number | null
           notes?: string | null
+          seed_only?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -59,6 +61,7 @@ export interface Database {
           cost?: number
           rating?: number | null
           notes?: string | null
+          seed_only?: boolean
           created_at?: string
           updated_at?: string
         }

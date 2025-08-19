@@ -25,6 +25,9 @@ type Overrides = Record<string, number>;
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const daysSince = (iso:string)=> Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000));
+// Markers to flag seeded meals (logged without a real date) so we can exclude from spend
+const SEED_TAG = '[SEED]';
+const isSeedMeal = (m: Meal)=> (m as any).seed_only === true || ((m.notes ?? '') as string).includes(SEED_TAG);
 // Precise weather: we will fetch current weather from Open-Meteo using geolocation.
 function mapWeatherCodeToCondition(code: number, tempF: number): Weather['condition'] {
   const rainyCodes = new Set<number>([
@@ -70,11 +73,11 @@ function pseudoWeatherFallback(): Weather {
 function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
 
 const seedMeals: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
-  { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null },
-  { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null },
-  { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null },
-  { date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3, notes: null },
-  { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null },
+  { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null, seed_only: false },
+  { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null, seed_only: false },
+  { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null, seed_only: false },
+  { date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3, notes: null, seed_only: false },
+  { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null, seed_only: false },
 ];
 
 function buildRecommendations(
@@ -152,8 +155,6 @@ export default function App() {
   // Saved preferences used by computation
   const [budgetSaved, setBudgetSaved] = useState<Budget>({ min: 10, max: 35 });
   const [forbidRepeatDaysSaved, setForbidRepeatDaysSaved] = useState(1);
-  // Toggle enforcement of no-repeat window
-  const [enforceNoRepeat, setEnforceNoRepeat] = useState(true);
   // Draft UI state for editing preferences
   const [budgetDraft, setBudgetDraft] = useState<{ min: string; max: string }>({ min: '10', max: '35' });
   const [forbidRepeatDaysDraft, setForbidRepeatDaysDraft] = useState<string>('1');
@@ -226,6 +227,18 @@ export default function App() {
   const [prefsError, setPrefsError] = useState<string | null>(null);
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSavedNotice, setPrefsSavedNotice] = useState<string | null>(null);
+  const isPrefsDirty = useMemo(() => {
+    const minSaved = String(budgetSaved.min);
+    const maxSaved = String(budgetSaved.max);
+    const daysSaved = String(forbidRepeatDaysSaved);
+    const mbSaved = monthlyBudgetSaved != null ? String(monthlyBudgetSaved) : '';
+    return (
+      budgetDraft.min.trim() !== minSaved ||
+      budgetDraft.max.trim() !== maxSaved ||
+      forbidRepeatDaysDraft.trim() !== daysSaved ||
+      monthlyBudgetDraft.trim() !== mbSaved
+    );
+  }, [budgetDraft, forbidRepeatDaysDraft, monthlyBudgetDraft, budgetSaved, forbidRepeatDaysSaved, monthlyBudgetSaved]);
 
   // Compute egg tier eligibility from saved budget
   const eggEligibility = useMemo(() => {
@@ -363,18 +376,23 @@ export default function App() {
       );
     } else { fallback(); }
   }, []);
-  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat, wx), [meals, budgetSaved, forbidRepeatDaysSaved, overrides, enforceNoRepeat, wx]);
+  const recs = useMemo(()=> buildRecommendations(meals, budgetSaved, forbidRepeatDaysSaved, overrides, true, wx), [meals, budgetSaved, forbidRepeatDaysSaved, overrides, wx]);
   const filteredRecs = recs.filter(r=> r.label.toLowerCase().includes(search.toLowerCase()));
 
   function monthKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
   const totalSpendCurrentMonth = useMemo(()=>{
     const nowKey = monthKey(new Date());
-    return meals.filter(m=> monthKey(new Date(m.date))===nowKey).reduce((s,m)=> s+m.cost, 0);
+    return meals
+      .filter(m=> !isSeedMeal(m))
+      .filter(m=> monthKey(new Date(m.date))===nowKey)
+      .reduce((s,m)=> s+m.cost, 0);
   }, [meals]);
   function totalSpendMonth(){
     const d = new Date();
     const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    return meals.filter(m => {
+    return meals
+      .filter(m => !isSeedMeal(m))
+      .filter(m => {
       const t = new Date(m.date);
       return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
     }).reduce((s,m)=> s+m.cost, 0);
@@ -388,7 +406,7 @@ export default function App() {
   const chartData = useMemo(()=>{
     const days: {day:string; spend:number}[] = [];
     for (let i=13;i>=0;i--){ const d=new Date(Date.now()-i*86400000); const k=d.toISOString().slice(0,10);
-      const spend = meals.filter(m=> m.date.slice(0,10)===k).reduce((s,m)=> s+m.cost, 0);
+      const spend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===k).reduce((s,m)=> s+m.cost, 0);
       days.push({ day:k.slice(5), spend: Math.round(spend*100)/100 });
     }
     return days;
@@ -413,7 +431,8 @@ export default function App() {
       cuisine: m.cuisine,
       cost: m.cost,
       rating: m.rating ?? null,
-      notes: m.notes ?? null
+      notes: m.notes ?? null,
+      seed_only: false
     });
     showToast('Logged to Meal History');
   }
@@ -425,7 +444,8 @@ export default function App() {
       cuisine: titleCase(r.label),
       cost: r.estCost,
       rating: null,
-      notes: null
+      notes: null,
+      seed_only: false
     });
     showToast('Logged to Meal History');
   }
@@ -440,6 +460,7 @@ export default function App() {
       cost: m.cost,
       rating: m.rating ?? null,
       notes: m.notes ?? null,
+      seed_only: false,
     });
     showToast('Selected! Added to your Meal History.');
   }
@@ -472,7 +493,7 @@ export default function App() {
     const scored = meals
       .filter(m => m.cost >= budgetSaved.min && m.cost <= budgetSaved.max)
       .filter(m => {
-        if (!enforceNoRepeat || forbidRepeatDaysSaved === 0) return true;
+        if (forbidRepeatDaysSaved === 0) return true;
         const lastT = lastByCuisine.get(m.cuisine);
         if (!lastT) return true;
         const days = Math.floor((now - lastT) / 86400000);
@@ -489,7 +510,7 @@ export default function App() {
     const deduped = Array.from(bestByKey.values());
     deduped.sort((a,b) => (b.score !== a.score) ? (b.score - a.score) : (b.meal.cost - a.meal.cost));
     return deduped;
-  }, [meals, budgetSaved, wx, forbidRepeatDaysSaved, enforceNoRepeat, coolOff]);
+  }, [meals, budgetSaved, wx, forbidRepeatDaysSaved, coolOff]);
 
   // App pick index consistent across UI and egg
   const [appPickIdx, setAppPickIdx] = useState<number | null>(null);
@@ -500,7 +521,7 @@ export default function App() {
     setAppPickIdx(idx);
   }
   // Recompute app pick when opening choices, or when inputs change
-  useEffect(() => { setAppPickIdx(null); }, [meals, budgetSaved, forbidRepeatDaysSaved, enforceNoRepeat, coolOff]);
+  useEffect(() => { setAppPickIdx(null); }, [meals, budgetSaved, forbidRepeatDaysSaved, coolOff]);
 
   function crackEgg(){
     setIsOverride(false);
@@ -531,6 +552,7 @@ export default function App() {
   const [cost, setCost] = useState<string>('15');
   const [rating, setRating] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
+  const [seedFlag, setSeedFlag] = useState<boolean>(false);
 
   function titleCase(s: string) {
     return s
@@ -549,23 +571,25 @@ export default function App() {
     const normalizedRestaurant = restaurant ? titleCase(restaurant) : null;
     const normalizedDish = dish ? titleCase(dish) : "Chef's choice";
     const normalizedCuisine = titleCase(cuisineInput);
+    const seeded = seedFlag;
     const mealData = { 
-      date: new Date(date).toISOString(), 
+      date: (date ? new Date(date) : new Date()).toISOString(), 
       restaurant: normalizedRestaurant, 
       dish: normalizedDish, 
       cuisine: normalizedCuisine, 
       cost: Math.max(0, Number(cost) || 0), 
       rating, 
-      notes: notes || null 
+      notes: (seeded ? `${SEED_TAG} ` : '') + (notes || '') || null,
+      seed_only: seeded
     };
     await addMeal(mealData);
-    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes('');
+    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false);
   }
 
   async function handleOrder(rec: Recommendation) {
     try {
       setError(null);
-      const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null };
+      const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null, seed_only: false };
       await addMeal(mealData);
       if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount); }
       setIsOverride(false);
@@ -593,7 +617,7 @@ export default function App() {
     const entry = browseEntries.find(e => e.key === key);
     if (!entry) return;
     const latest = entry.latest;
-    await addMeal({ date: new Date().toISOString(), restaurant: latest.restaurant, dish: latest.dish, cuisine: latest.cuisine, cost: latest.cost, rating: latest.rating ?? null, notes: latest.notes ?? null });
+    await addMeal({ date: new Date().toISOString(), restaurant: latest.restaurant, dish: latest.dish, cuisine: latest.cuisine, cost: latest.cost, rating: latest.rating ?? null, notes: latest.notes ?? null, seed_only: false });
   }
 
   // Browse: delete entire group with confirmation (removes all history for that item)
@@ -627,7 +651,8 @@ export default function App() {
           cuisine: editMeal.cuisine,
           cost: editMeal.cost,
           rating: editMeal.rating ?? null,
-          notes: editMeal.notes ?? null
+          notes: editMeal.notes ?? null,
+          seed_only: (editMeal as any).seed_only === true
         };
         const created = await FoodChooserAPI.addMeal(newData);
         setMeals(prev => [created, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
@@ -759,16 +784,11 @@ export default function App() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="relative flex items-center gap-2">
-            {/* Project icon with hover preview */}
-            <div className="relative group">
-              <img src="/logo.png" alt="Foodie’s Choice" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
-              <div className="pointer-events-none absolute left-0 top-0 hidden -translate-x-2 -translate-y-2 rounded-xl border bg-white p-1 shadow-2xl group-hover:block">
-                <img src="/logo.png" alt="Foodie’s Choice" className="h-24 w-24 rounded object-cover" />
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            {/* Project icon if present */}
+            <img src="/logo.png" alt="FuDi" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
             <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">Foodie’s Choice</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
           </div>
           <p className="text-sm text-zinc-600">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
         </div>
@@ -842,7 +862,7 @@ export default function App() {
       {/* Controls */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Budget</div>
+          <div className="text-sm font-semibold mb-1">Meal budget</div>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <div className="label">Min</div>
@@ -853,10 +873,7 @@ export default function App() {
                   <input className="input" type="number" value={budgetDraft.max} onChange={e=> setBudgetDraft(prev=> ({...prev, max: e.target.value}))} />
             </div>
           </div>
-              <label className="mt-1 flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={enforceNoRepeat} onChange={e=> setEnforceNoRepeat(e.target.checked)} />
-                Enforce no-repeat window
-          </label>
+              
               <div className="mt-1 text-xs text-zinc-600">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
               <div className="mt-3 text-sm font-semibold">Egg tiers</div>
               <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
@@ -877,19 +894,8 @@ export default function App() {
           </select>
               {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
               {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  className="btn-ghost"
-                  onClick={() => {
-                    setPrefsError(null);
-                    setPrefsSavedNotice(null);
-                    setBudgetDraft({ min: String(budgetSaved.min), max: String(budgetSaved.max) });
-                    setForbidRepeatDaysDraft(String(forbidRepeatDaysSaved));
-                  }}
-                >
-                  Reset to saved
-                </button>
-                <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
+              <div className="mt-3 flex justify-end">
+                <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
               </div>
         </div>
 
@@ -915,20 +921,8 @@ export default function App() {
               {/* Monthly budget summary placed below chart for more space */}
               <div className="mt-5">
                 <div className="flex items-center justify-between">
-                  <div className="label">Monthly budget</div>
-                  {!monthlyBudgetEdit && (
-                    <button className="btn-ghost" onClick={()=> { setMonthlyBudgetEdit(true); }}>Edit</button>
-                  )}
-        </div>
-                {monthlyBudgetEdit ? (
-          <div className="mt-1 flex items-center gap-2">
-                    <input className="input w-32" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e=> setMonthlyBudgetDraft(e.target.value)} />
-                    <button className="btn-primary" onClick={async ()=> { setPrefsError(null); setPrefsSavedNotice(null); await savePreferences(); setMonthlyBudgetEdit(false); }}>Save</button>
-                    <button className="btn-ghost" onClick={()=> { setMonthlyBudgetDraft(monthlyBudgetSaved != null ? String(monthlyBudgetSaved) : ''); setMonthlyBudgetEdit(false); }}>Cancel</button>
-                  </div>
-                ) : (
-                  <div className="mt-1 text-sm text-zinc-700">{monthlyBudgetSaved != null && monthlyBudgetSaved > 0 ? currency(monthlyBudgetSaved) : 'Not set'}</div>
-                )}
+                  <div className="label font-semibold">Monthly budget</div>
+                </div>
                 {monthlyBudgetSaved !== null && monthlyBudgetSaved > 0 && (
                   (()=>{
                     const spent = totalSpendMonth();
@@ -967,7 +961,7 @@ export default function App() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <div>
             <div className="label">Date</div>
-                <input className="input" type="datetime-local" value={new Date(date).toISOString().slice(0,16)} onChange={e=> setDate(new Date(e.target.value).toISOString().slice(0,10))} />
+            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
           </div>
           <div>
             <div className="label">Cost (USD)</div>
@@ -998,6 +992,10 @@ export default function App() {
             <div className="label">Notes</div>
             <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
           </div>
+          <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
+            Mark as seed (won't count toward spend)
+          </label>
         </div>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
           </div>
@@ -1049,7 +1047,7 @@ export default function App() {
             <tbody>
                 {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
                 <tr key={m.id} className="hover:bg-zinc-50">
-                  <td className="td">{m.date.slice(0,10)}</td>
+                  <td className="td">{m.date.slice(0,10)} {isSeedMeal(m) && <span className="text-amber-700">(seed)</span>}</td>
                     <td className="td">{displayTitle(m.cuisine, '—')}</td>
                     <td className="td">{displayTitle(m.restaurant, '—')}</td>
                     <td className="td">{displayTitle(m.dish)}</td>
@@ -1090,7 +1088,7 @@ export default function App() {
         const dayData: { day: string; spend: number }[] = [];
         for (let i=179;i>=0;i--) {
           const d=new Date(today.getTime()-i*86400000); const iso=d.toISOString().slice(0,10);
-          const spend = meals.filter(m=> m.date.slice(0,10)===iso).reduce((s,m)=> s+m.cost, 0);
+          const spend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===iso).reduce((s,m)=> s+m.cost, 0);
           dayData.push({ day: iso, spend: Math.round(spend*100)/100 });
         }
         const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -1102,7 +1100,7 @@ export default function App() {
         const sortedMonths = Array.from(monthMap.entries()).sort(([a],[b])=> a<b? -1:1).slice(-12);
         const monthData = sortedMonths.map(([k,v])=> ({ month: k, spend: Math.round(v*100)/100 }));
         const selectionLabel = spendMode==='daily' ? (spendSelection ?? 'Select a day') : (spendSelection ?? 'Select a month');
-        const contributingMeals = spendSelection ? meals.filter(m => (spendMode==='daily' ? m.date.slice(0,10)===spendSelection : monthKey(new Date(m.date))===spendSelection)) : [];
+        const contributingMeals = spendSelection ? meals.filter(m => !isSeedMeal(m) && (spendMode==='daily' ? m.date.slice(0,10)===spendSelection : monthKey(new Date(m.date))===spendSelection)) : [];
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
