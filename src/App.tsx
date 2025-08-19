@@ -580,6 +580,7 @@ export default function App() {
   const [rating, setRating] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
   const [seedFlag, setSeedFlag] = useState<boolean>(false);
+  const [logTab, setLogTab] = useState<'meal'|'grocery'>('meal');
 
   function titleCase(s: string) {
     return s
@@ -993,50 +994,7 @@ export default function App() {
         {/* Quick Filters removed as redundant with Browse */}
       </div>
 
-          {/* Log a Meal */}
-      <div className="card p-5">
-        <div className="text-sm font-semibold mb-3">Log a Meal</div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <div className="label">Date</div>
-            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Cost (USD)</div>
-            <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Cuisine</div>
-            <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
-            <datalist id="cuisine-list">
-              {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
-            </datalist>
-          </div>
-          <div>
-            <div className="label">Restaurant</div>
-                <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
-                <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
-          </div>
-          <div>
-            <div className="label">Dish</div>
-                <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
-                <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
-          </div>
-          <div>
-            <div className="label">Rating (1-5)</div>
-            <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <div className="label">Notes</div>
-            <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
-          </div>
-          <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
-            Mark as seed (won't count toward spend)
-          </label>
-        </div>
-            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
-          </div>
+          
 
           {/* Reveal Choices (Order Section) */}
           <div className="card p-5">
@@ -1062,49 +1020,102 @@ export default function App() {
             )}
       </div>
 
-      {/* Groceries */}
+          {/* Log Entry (Meal | Grocery Trip) */}
       <div className="card p-5">
-        <div className="text-sm font-semibold mb-3">Log a Grocery</div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <div className="label">Date</div>
-            <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Amount (USD)</div>
-            <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">Notes</div>
-            <input className="input" value={gNotes} onChange={e=> setGNotes(e.target.value)} placeholder="e.g., Trader Joe's" />
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold">Log</div>
+          <div className="flex gap-2">
+            <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>Meal</button>
+            <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>Grocery Trip</button>
           </div>
         </div>
-        <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
-          const amt = Number(gAmount) || 0;
-          if (amt <= 0) { showToast('Enter a valid amount'); return; }
-          await FoodChooserAPI.addGrocery({ date: new Date(gDate).toISOString(), amount: amt, notes: gNotes || null });
-          const latest = await FoodChooserAPI.getGroceries();
-          setGroceries(latest);
-          setGDate(todayISO()); setGAmount('50'); setGNotes('');
-          showToast('Grocery saved');
-        }}>Save Grocery</button></div>
-        <div className="mt-4">
-          <div className="text-sm font-semibold mb-1">Grocery History</div>
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Notes</th><th className="th text-right">Amount</th></tr></thead>
-              <tbody>
-                {groceries.slice(0,10).map(g => (
-                  <tr key={g.id} className="hover:bg-zinc-50">
-                    <td className="td">{g.date.slice(0,10)}</td>
-                    <td className="td">{g.notes ?? '—'}</td>
-                    <td className="td text-right">{currency(g.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {logTab==='meal' ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <div className="label">Date</div>
+                <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">Cost (USD)</div>
+                <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">Cuisine</div>
+                <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
+                <datalist id="cuisine-list">
+                  {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div>
+                <div className="label">Restaurant</div>
+                <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
+                <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
+              </div>
+              <div>
+                <div className="label">Dish</div>
+                <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
+                <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
+              </div>
+              <div>
+                <div className="label">Rating (1-5)</div>
+                <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
+              </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <div className="label">Notes</div>
+                <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
+              </div>
+              <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
+                Mark as seed (won't count toward spend)
+              </label>
+            </div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <div className="label">Date</div>
+                <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">Amount (USD)</div>
+                <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">Notes</div>
+                <input className="input" value={gNotes} onChange={e=> setGNotes(e.target.value)} placeholder="e.g., Trader Joe's" />
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
+              const amt = Number(gAmount) || 0;
+              if (amt <= 0) { showToast('Enter a valid amount'); return; }
+              await FoodChooserAPI.addGrocery({ date: new Date(gDate).toISOString(), amount: amt, notes: gNotes || null });
+              const latest = await FoodChooserAPI.getGroceries();
+              setGroceries(latest);
+              setGDate(todayISO()); setGAmount('50'); setGNotes('');
+              showToast('Grocery trip saved');
+            }}>Save Trip</button></div>
+            <div className="mt-4">
+              <div className="text-sm font-semibold mb-1">Grocery Trip History</div>
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Notes</th><th className="th text-right">Amount</th></tr></thead>
+                  <tbody>
+                    {groceries.slice(0,10).map(g => (
+                      <tr key={g.id} className="hover:bg-zinc-50">
+                        <td className="td">{g.date.slice(0,10)}</td>
+                        <td className="td">{g.notes ?? '—'}</td>
+                        <td className="td text-right">{currency(g.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Recommendations removed per request to simplify Home */}
@@ -1120,29 +1131,70 @@ export default function App() {
         </div>
       )}
 
-      {/* Meal History (Home only) */}
+      {/* History (Meal | Grocery Trip) */}
       {activeTab === 'home' && (
-      <div className="card p-5">
-          <div className="flex items-center justify-between"><div className="text-sm font-semibold">Meal History</div><button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button></div>
-        <div className="overflow-x-auto">
-          <table className="table">
-              <thead><tr className="bg-zinc-50"><th className="th text-left">Date</th><th className="th text-left">Cuisine</th><th className="th text-left">Restaurant</th><th className="th text-left">Dish</th><th className="th text-right">Cost</th><th className="th text-center">Rating</th><th className="th text-center">Actions</th></tr></thead>
-            <tbody>
-                {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
-                <tr key={m.id} className="hover:bg-zinc-50">
-                  <td className="td">{m.date.slice(0,10)} {isSeedMeal(m) && <span className="text-amber-700">(seed)</span>}</td>
-                    <td className="td">{displayTitle(m.cuisine, '—')}</td>
-                    <td className="td">{displayTitle(m.restaurant, '—')}</td>
-                    <td className="td">{displayTitle(m.dish)}</td>
-                  <td className="td text-right">{currency(m.cost)}</td>
-                  <td className="td text-center">{m.rating ?? '—'}</td>
-                    <td className="td text-center"><button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button><button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="card p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm font-semibold">History</div>
+            <div className="flex items-center gap-2">
+              <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>Meal</button>
+              <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>Grocery Trip</button>
+              <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            {logTab==='meal' ? (
+              <table className="table">
+                <thead>
+                  <tr className="bg-zinc-50">
+                    <th className="th text-left">Date</th>
+                    <th className="th text-left">Cuisine</th>
+                    <th className="th text-left">Restaurant</th>
+                    <th className="th text-left">Dish</th>
+                    <th className="th text-right">Cost</th>
+                    <th className="th text-center">Rating</th>
+                    <th className="th text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
+                    <tr key={m.id} className="hover:bg-zinc-50">
+                      <td className="td">{m.date.slice(0,10)} {isSeedMeal(m) && <span className="text-amber-700">(seed)</span>}</td>
+                      <td className="td">{displayTitle(m.cuisine, '—')}</td>
+                      <td className="td">{displayTitle(m.restaurant, '—')}</td>
+                      <td className="td">{displayTitle(m.dish)}</td>
+                      <td className="td text-right">{currency(m.cost)}</td>
+                      <td className="td text-center">{m.rating ?? '—'}</td>
+                      <td className="td text-center">
+                        <button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button>
+                        <button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr className="bg-zinc-50">
+                    <th className="th text-left">Date</th>
+                    <th className="th text-left">Notes</th>
+                    <th className="th text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllHistory ? groceries : groceries.slice(0,10)).map(g => (
+                    <tr key={g.id} className="hover:bg-zinc-50">
+                      <td className="td">{g.date.slice(0,10)}</td>
+                      <td className="td">{g.notes ?? '—'}</td>
+                      <td className="td text-right">{currency(g.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-      </div>
       )}
 
       {/* Edit history modal */}
