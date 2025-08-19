@@ -759,11 +759,16 @@ export default function App() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <div className="flex items-center gap-2">
-            {/* Project icon if present */}
-            <img src="/logo.png" alt="FuDi" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
+          <div className="relative flex items-center gap-2">
+            {/* Project icon with hover preview */}
+            <div className="relative group">
+              <img src="/logo.png" alt="Foodie’s Choice" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
+              <div className="pointer-events-none absolute left-0 top-0 hidden -translate-x-2 -translate-y-2 rounded-xl border bg-white p-1 shadow-2xl group-hover:block">
+                <img src="/logo.png" alt="Foodie’s Choice" className="h-24 w-24 rounded object-cover" />
+              </div>
+            </div>
             <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">Foodie’s Choice</h1>
           </div>
           <p className="text-sm text-zinc-600">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
         </div>
