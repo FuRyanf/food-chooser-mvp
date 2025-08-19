@@ -1219,9 +1219,9 @@ export default function App() {
         const totalMealsWindow = monthData.reduce((s, d) => s + d.meals, 0);
         const totalGroceriesWindow = monthData.reduce((s, d) => s + d.groceries, 0);
         const totalWindow = Math.round((totalMealsWindow + totalGroceriesWindow) * 100) / 100;
-        const selectionLabel = spendSelection ?? 'Select a month';
-        const contributingMeals = spendSelection ? meals.filter(m => monthKey(new Date(m.date))===spendSelection && !isSeedMeal(m)) : [];
-        const contributingGroceries = spendSelection ? groceries.filter(g => monthKey(new Date(g.date))===spendSelection) : [];
+        const selectedMonth = windowMonths.includes(spendSelection || '') ? (spendSelection as string) : windowMonths[5];
+        const contributingMeals = meals.filter(m => monthKey(new Date(m.date))===selectedMonth && !isSeedMeal(m));
+        const contributingGroceries = groceries.filter(g => monthKey(new Date(g.date))===selectedMonth);
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
@@ -1246,17 +1246,19 @@ export default function App() {
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="meals" stackId="a" fill="#10b981" />
-                        <Bar dataKey="groceries" stackId="a" fill="#3b82f6" fillOpacity={0.7} />
-                      </BarChart>
-                  </ResponsiveContainer>
+                <div>
+                  <div className="h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="meals" stackId="a" fill="#10b981" />
+                          <Bar dataKey="groceries" stackId="a" fill="#3b82f6" fillOpacity={0.7} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs">
                     <div className="rounded border p-3"><div className="text-zinc-600">Total (6 mo)</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
                     <div className="rounded border p-3"><div className="text-zinc-600">Groceries</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
@@ -1265,35 +1267,28 @@ export default function App() {
                 </div>
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm font-semibold">{spendSelection ?? 'Select a month'}</div>
-                    {spendSelection && (
-                      <button className="btn-ghost" onClick={()=> setSpendSelection(null)}>Back</button>
-                    )}
+                    <div className="text-sm font-semibold">{selectedMonth}</div>
                   </div>
                   <div className="max-h-[220px] overflow-auto">
-                    {spendSelection ? (
-                      <>
-                        {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
-                          <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm">
-                            <div>
-                              <div className="font-medium">Grocery</div>
-                              <div className="text-xs text-zinc-600">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
-                            </div>
-                            <div className="font-semibold">{currency(g.amount)}</div>
-                          </div>
-                        ))}
-                        {contributingMeals.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
-                          <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm">
-                            <div>
-                              <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
-                              <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
-                            </div>
-                            <div className="font-semibold">{currency(m.cost)}</div>
-                          </div>
-                        ))}
-                        {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="text-sm text-zinc-600">No spend in this month.</div>}
-                      </>
-                    ) : null}
+                    {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
+                      <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                        <div>
+                          <div className="font-medium">Grocery</div>
+                          <div className="text-xs text-zinc-600">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
+                        </div>
+                        <div className="font-semibold">{currency(g.amount)}</div>
+                      </div>
+                    ))}
+                    {contributingMeals.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
+                      <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                        <div>
+                          <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
+                          <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
+                        </div>
+                        <div className="font-semibold">{currency(m.cost)}</div>
+                      </div>
+                    ))}
+                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="text-sm text-zinc-600">No spend in this month.</div>}
                   </div>
                 </div>
               </div>
