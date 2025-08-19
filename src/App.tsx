@@ -215,8 +215,13 @@ export default function App() {
 
   // Spend drilldown modal
   const [spendOpen, setSpendOpen] = useState(false);
-  const [spendMode, setSpendMode] = useState<'daily'|'monthly'>('daily');
-  const [spendSelection, setSpendSelection] = useState<string | null>(null); // ISO day or YYYY-MM
+  const [spendSelection, setSpendSelection] = useState<string | null>(null); // YYYY-MM
+  const [spendWindowStart, setSpendWindowStart] = useState<string>(() => {
+    const d = new Date();
+    // start at current month - 5 for a 6-month window ending this month
+    const start = new Date(d.getFullYear(), d.getMonth() - 5, 1);
+    return `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
+  });
   const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
   const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
@@ -390,11 +395,15 @@ export default function App() {
   function monthKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
   const totalSpendCurrentMonth = useMemo(()=>{
     const nowKey = monthKey(new Date());
-    return meals
+    const mealsSum = meals
       .filter(m=> !isSeedMeal(m))
       .filter(m=> monthKey(new Date(m.date))===nowKey)
       .reduce((s,m)=> s+m.cost, 0);
-  }, [meals]);
+    const groceriesSum = groceries
+      .filter(g=> monthKey(new Date(g.date))===nowKey)
+      .reduce((s,g)=> s+g.amount, 0);
+    return mealsSum + groceriesSum;
+  }, [meals, groceries]);
   function totalSpendMonth(){
     const d = new Date();
     const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -422,11 +431,13 @@ export default function App() {
   const chartData = useMemo(()=>{
     const days: {day:string; spend:number}[] = [];
     for (let i=13;i>=0;i--){ const d=new Date(Date.now()-i*86400000); const k=d.toISOString().slice(0,10);
-      const spend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===k).reduce((s,m)=> s+m.cost, 0);
+      const mealSpend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===k).reduce((s,m)=> s+m.cost, 0);
+      const grocerySpend = groceries.filter(g=> g.date.slice(0,10)===k).reduce((s,g)=> s+g.amount, 0);
+      const spend = mealSpend + grocerySpend;
       days.push({ day:k.slice(5), spend: Math.round(spend*100)/100 });
     }
     return days;
-  }, [meals]);
+  }, [meals, groceries]);
 
   async function seedDemo(){
     try { for (const meal of seedMeals) { await FoodChooserAPI.addMeal(meal); } await loadData(); }
@@ -812,7 +823,6 @@ export default function App() {
           <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
           <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
           <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
-          <button className="btn-outline" onClick={seedDemo}><History className="h-4 w-4"/> Load Demo Data</button>
           <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
       </header>
@@ -934,7 +944,7 @@ export default function App() {
                 <div><div className="label">Temp</div><div className="text-lg font-semibold">{wx.tempF}°F</div></div>
             <div>
               <div className="label">Month-to-date Spend</div>
-                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendMode('monthly'); setSpendSelection(monthKey(new Date())); setSpendOpen(true); }}>{currency(totalSpendCurrentMonth)}</button>
+                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendSelection(monthKey(new Date())); setSpendOpen(true); }}>{currency(totalSpendCurrentMonth)}</button>
             </div>
           </div>
           <div className="mt-4 h-[120px]">
@@ -1156,68 +1166,104 @@ export default function App() {
 
       {/* Spend drilldown modal */}
       {spendOpen && (() => {
-        // Build daily (last 180 days) and monthly (last 12 months) datasets
-        const today = new Date();
-        const dayData: { day: string; spend: number }[] = [];
-        for (let i=179;i>=0;i--) {
-          const d=new Date(today.getTime()-i*86400000); const iso=d.toISOString().slice(0,10);
-          const spend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===iso).reduce((s,m)=> s+m.cost, 0);
-          dayData.push({ day: iso, spend: Math.round(spend*100)/100 });
-        }
+        // Build fixed 6-month window data starting from spendWindowStart
         const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        const monthMap = new Map<string, number>();
-        for (const m of meals) {
-          const k = monthKey(new Date(m.date));
-          monthMap.set(k, (monthMap.get(k) ?? 0) + m.cost);
+        const [y, m] = spendWindowStart.split('-').map(Number);
+        const windowMonths: string[] = Array.from({ length: 6 }, (_, i) => monthKey(new Date((y||1970), (m||1)-1 + i, 1)));
+        const monthMapMeals = new Map<string, number>();
+        const monthMapGroceries = new Map<string, number>();
+        for (const mm of windowMonths) { monthMapMeals.set(mm, 0); monthMapGroceries.set(mm, 0); }
+        for (const meal of meals) {
+          const k = monthKey(new Date(meal.date));
+          if (windowMonths.includes(k) && !isSeedMeal(meal)) monthMapMeals.set(k, (monthMapMeals.get(k) ?? 0) + meal.cost);
         }
-        const sortedMonths = Array.from(monthMap.entries()).sort(([a],[b])=> a<b? -1:1).slice(-12);
-        const monthData = sortedMonths.map(([k,v])=> ({ month: k, spend: Math.round(v*100)/100 }));
-        const selectionLabel = spendMode==='daily' ? (spendSelection ?? 'Select a day') : (spendSelection ?? 'Select a month');
-        const contributingMeals = spendSelection ? meals.filter(m => !isSeedMeal(m) && (spendMode==='daily' ? m.date.slice(0,10)===spendSelection : monthKey(new Date(m.date))===spendSelection)) : [];
+        for (const g of groceries) {
+          const k = monthKey(new Date(g.date));
+          if (windowMonths.includes(k)) monthMapGroceries.set(k, (monthMapGroceries.get(k) ?? 0) + g.amount);
+        }
+        const monthData = windowMonths.map(k => ({
+          month: k,
+          meals: Math.round((monthMapMeals.get(k) ?? 0)*100)/100,
+          groceries: Math.round((monthMapGroceries.get(k) ?? 0)*100)/100,
+        }));
+        const totalMealsWindow = monthData.reduce((s, d) => s + d.meals, 0);
+        const totalGroceriesWindow = monthData.reduce((s, d) => s + d.groceries, 0);
+        const totalWindow = Math.round((totalMealsWindow + totalGroceriesWindow) * 100) / 100;
+        const selectionLabel = spendSelection ?? 'Select a month';
+        const contributingMeals = spendSelection ? meals.filter(m => monthKey(new Date(m.date))===spendSelection && !isSeedMeal(m)) : [];
+        const contributingGroceries = spendSelection ? groceries.filter(g => monthKey(new Date(g.date))===spendSelection) : [];
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-lg font-semibold">Eating-out Spend</div>
+                <div className="text-lg font-semibold">Spend</div>
                 <div className="flex gap-2">
-                  <button className={`btn-ghost ${spendMode==='daily'?'border':''}`} onClick={()=> { setSpendMode('daily'); setSpendSelection(null); }}>Daily</button>
-                  <button className={`btn-ghost ${spendMode==='monthly'?'border':''}`} onClick={()=> { setSpendMode('monthly'); setSpendSelection(null); }}>Monthly</button>
+                  <button className="btn-ghost" title="Previous 6 months" onClick={()=> {
+                    // move window back by 1 month
+                    const [yy, mm] = spendWindowStart.split('-').map(Number);
+                    const prev = new Date((yy||1970), (mm||1)-2, 1);
+                    setSpendWindowStart(`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`);
+                    setSpendSelection(null);
+                  }}>◀ 6mo</button>
+                  <div className="rounded border px-2 py-1 text-sm" title="Currently viewing a 6-month window">{windowMonths[0]} — {windowMonths[5]}</div>
+                  <button className="btn-ghost" title="Next 6 months" onClick={()=> {
+                    // move window forward by 1 month
+                    const [yy, mm] = spendWindowStart.split('-').map(Number);
+                    const next = new Date((yy||1970), (mm||1), 1);
+                    setSpendWindowStart(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
+                    setSpendSelection(null);
+                  }}>6mo ▶</button>
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    {spendMode==='daily' ? (
-                      <LineChart data={dayData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="day" tickFormatter={(v)=> v.slice(5)} />
-                        <YAxis />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    ) : (
-                      <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
+                    <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
                         <Tooltip />
-                        <Bar dataKey="spend" />
+                        <Bar dataKey="meals" stackId="a" fill="#10b981" />
+                        <Bar dataKey="groceries" stackId="a" fill="#3b82f6" fillOpacity={0.7} />
                       </BarChart>
-                    )}
                   </ResponsiveContainer>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs">
+                    <div className="rounded border p-3"><div className="text-zinc-600">Total (6 mo)</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
+                    <div className="rounded border p-3"><div className="text-zinc-600">Groceries</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
+                    <div className="rounded border p-3"><div className="text-zinc-600">Meals</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
+                  </div>
                 </div>
                 <div>
-                  <div className="text-sm font-semibold mb-2">{selectionLabel}</div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-sm font-semibold">{spendSelection ?? 'Select a month'}</div>
+                    {spendSelection && (
+                      <button className="btn-ghost" onClick={()=> setSpendSelection(null)}>Back</button>
+                    )}
+                  </div>
                   <div className="max-h-[220px] overflow-auto">
-                    {contributingMeals.length ? contributingMeals.sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
-                      <div key={m.id} className="flex items-center justify-between border-b py-2 text-sm">
-                        <div>
-                          <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
-                          <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
-                        </div>
-                        <div className="font-semibold">{currency(m.cost)}</div>
-                      </div>
-                    )) : <div className="text-sm text-zinc-600">Select a {spendMode==='daily' ? 'day' : 'month'} to see details.</div>}
+                    {spendSelection ? (
+                      <>
+                        {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
+                          <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                            <div>
+                              <div className="font-medium">Grocery</div>
+                              <div className="text-xs text-zinc-600">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
+                            </div>
+                            <div className="font-semibold">{currency(g.amount)}</div>
+                          </div>
+                        ))}
+                        {contributingMeals.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
+                          <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                            <div>
+                              <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
+                              <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
+                            </div>
+                            <div className="font-semibold">{currency(m.cost)}</div>
+                          </div>
+                        ))}
+                        {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="text-sm text-zinc-600">No spend in this month.</div>}
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1271,7 +1317,7 @@ export default function App() {
 
       <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Meal History"} />
 
-      <footer className="pb-8 pt-2 text-center text-xs text-zinc-500">Built for MVP demo • Data saved to Supabase database</footer>
+      
       {/* Toast */}
       {toast.show && (
         <div className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 transform">
