@@ -873,6 +873,12 @@ export default function App() {
                   <input className="input" type="number" value={budgetDraft.max} onChange={e=> setBudgetDraft(prev=> ({...prev, max: e.target.value}))} />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <div className="label">Monthly budget</div>
+              <input className="input" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e=> setMonthlyBudgetDraft(e.target.value)} />
+            </div>
+          </div>
               
               <div className="mt-1 text-xs text-zinc-600">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
               <div className="mt-3 text-sm font-semibold">Egg tiers</div>
@@ -890,13 +896,15 @@ export default function App() {
               </div>
           <div className="mt-3 text-sm">No repeat within (days)</div>
               <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e=> setForbidRepeatDaysDraft(e.target.value)}>
-                {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n}</option>)}
-          </select>
+                {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n===0 ? '0 (allow repeats)' : n}</option>)}
+              </select>
               {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
               {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
-              <div className="mt-3 flex justify-end">
-                <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
-              </div>
+              { (isPrefsDirty || prefsSaving) && (
+                <div className="mt-3 flex justify-end">
+                  <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
+                </div>
+              )}
         </div>
 
         <div className="card p-5">
