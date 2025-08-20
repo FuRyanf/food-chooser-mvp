@@ -23,6 +23,28 @@ type Recommendation = {
 type Overrides = Record<string, number>;
 
 const currency = (n:number)=> `$${n.toFixed(2)}`;
+
+// Los Angeles timezone helpers
+function toLocalDate(dateString: string): Date {
+  // Create date in local timezone (PST/PDT) rather than UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed
+}
+
+function toLocalISOString(dateString: string): string {
+  // Convert date string to ISO string representing noon local time to avoid timezone shifts
+  const [year, month, day] = dateString.split('-').map(Number);
+  const localDate = new Date(year, month - 1, day, 12, 0, 0); // Set to noon local time
+  return localDate.toISOString();
+}
+
+function getLocalMonthKey(dateString: string): string {
+  // Get month key using local timezone parsing
+  const [year, month, day] = dateString.split('-').map(Number);
+  const localDate = new Date(year, month - 1, day);
+  return `${localDate.getFullYear()}-${String(localDate.getMonth()+1).padStart(2,'0')}`;
+}
+
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const daysSince = (iso:string)=> Math.max(0, Math.floor((Date.now()-new Date(iso).getTime())/86400000));
 // Markers to flag seeded meals (logged without a real date) so we can exclude from spend
@@ -189,7 +211,9 @@ export default function App() {
   const [groceries, setGroceries] = useState<Grocery[]>([]);
   const [gDate, setGDate] = useState<string>(todayISO());
   const [gAmount, setGAmount] = useState<string>('50');
-  const [gNotes, setGNotes] = useState<string>('');
+  const [gStore, setGStore] = useState<string>('');
+  const [showStoreDropdown, setShowStoreDropdown] = useState<boolean>(false);
+  const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(-1);
   useEffect(() => {
     // Load disabled items from Supabase
     (async () => {
@@ -397,10 +421,18 @@ export default function App() {
     const nowKey = monthKey(new Date());
     const mealsSum = meals
       .filter(m=> !isSeedMeal(m))
-      .filter(m=> monthKey(new Date(m.date))===nowKey)
+      .filter(m=> {
+        // Use local month key for stored ISO dates
+        const storedMonthKey = getLocalMonthKey(m.date.slice(0,10));
+        return storedMonthKey === nowKey;
+      })
       .reduce((s,m)=> s+m.cost, 0);
     const groceriesSum = groceries
-      .filter(g=> monthKey(new Date(g.date))===nowKey)
+      .filter(g=> {
+        // Use local month key for stored ISO dates
+        const storedMonthKey = getLocalMonthKey(g.date.slice(0,10));
+        return storedMonthKey === nowKey;
+      })
       .reduce((s,g)=> s+g.amount, 0);
     return mealsSum + groceriesSum;
   }, [meals, groceries]);
@@ -410,16 +442,16 @@ export default function App() {
     return meals
       .filter(m => !isSeedMeal(m))
       .filter(m => {
-      const t = new Date(m.date);
-      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
-    }).reduce((s,m)=> s+m.cost, 0);
+        const storedMonthKey = getLocalMonthKey(m.date.slice(0,10));
+        return storedMonthKey === ym;
+      }).reduce((s,m)=> s+m.cost, 0);
   }
   function totalGroceryMonth(){
     const d = new Date();
     const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     return groceries.filter(g => {
-      const t = new Date(g.date);
-      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}` === ym;
+      const storedMonthKey = getLocalMonthKey(g.date.slice(0,10));
+      return storedMonthKey === ym;
     }).reduce((s,g)=> s+g.amount, 0);
   }
   function budgetBarColor(pct: number){
@@ -430,7 +462,10 @@ export default function App() {
   }
   const chartData = useMemo(()=>{
     const days: {day:string; spend:number}[] = [];
-    for (let i=13;i>=0;i--){ const d=new Date(Date.now()-i*86400000); const k=d.toISOString().slice(0,10);
+    for (let i=13;i>=0;i--){ 
+      const d=new Date(Date.now()-i*86400000); 
+      const k=d.toISOString().slice(0,10);
+      // For chart matching, compare using local date strings since stored dates should match local input dates
       const mealSpend = meals.filter(m=> !isSeedMeal(m) && m.date.slice(0,10)===k).reduce((s,m)=> s+m.cost, 0);
       const grocerySpend = groceries.filter(g=> g.date.slice(0,10)===k).reduce((s,g)=> s+g.amount, 0);
       const spend = mealSpend + grocerySpend;
@@ -601,7 +636,7 @@ export default function App() {
     const normalizedCuisine = titleCase(cuisineInput);
     const seeded = seedFlag;
     const mealData = { 
-      date: (date ? new Date(date) : new Date()).toISOString(), 
+      date: (date ? toLocalISOString(date) : new Date().toISOString()), 
       restaurant: normalizedRestaurant, 
       dish: normalizedDish, 
       cuisine: normalizedCuisine, 
@@ -620,7 +655,7 @@ export default function App() {
       const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null, seed_only: false };
       await addMeal(mealData);
       if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount); }
-      setIsOverride(false);
+    setIsOverride(false);
     } catch (err) { console.error('Error handling order:', err); setError('Failed to save meal'); }
   }
 
@@ -718,6 +753,42 @@ export default function App() {
       setError('Failed to delete entry');
     }
   }
+
+  async function deleteGroceryHistory(id: string) {
+    try {
+      const confirm = window.confirm('Are you sure you want to delete this grocery entry?');
+      if (!confirm) return;
+      await FoodChooserAPI.deleteGrocery(id);
+      setGroceries(prev => prev.filter(g => g.id !== id));
+    } catch (e) {
+      console.error('Delete grocery failed', e);
+      setError('Failed to delete grocery entry');
+    }
+  }
+
+  // Extract unique stores from grocery history for autocomplete
+  const uniqueStores = useMemo(() => {
+    const stores = groceries
+      .map(g => g.notes?.trim())
+      .filter((store): store is string => Boolean(store))
+      .reduce((unique, store) => {
+        const normalized = store.toLowerCase();
+        if (!unique.some(s => s.toLowerCase() === normalized)) {
+          unique.push(store);
+        }
+        return unique;
+      }, [] as string[]);
+    return stores.sort();
+  }, [groceries]);
+
+  // Filter stores for autocomplete based on current input
+  const filteredStores = useMemo(() => {
+    if (!gStore.trim()) return [];
+    const query = gStore.toLowerCase().trim();
+    return uniqueStores.filter(store => 
+      store.toLowerCase().includes(query)
+    ).slice(0, 5); // Limit to 5 suggestions
+  }, [gStore, uniqueStores]);
 
   // For Browse: compute deduped entries by (restaurant, dish) with latest date and latest price (case-insensitive)
   const browseEntries = useMemo(() => {
@@ -924,7 +995,7 @@ export default function App() {
           <div className="mt-3 text-sm">No repeat within (days)</div>
               <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e=> setForbidRepeatDaysDraft(e.target.value)}>
                 {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n===0 ? '0 (allow repeats)' : n}</option>)}
-              </select>
+          </select>
               {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
               {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
               { (isPrefsDirty || prefsSaving) && (
@@ -997,11 +1068,11 @@ export default function App() {
           
 
           {/* Reveal Choices (Order Section) */}
-          <div className="card p-5">
+        <div className="card p-5">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">Top choices for you</div>
               <div className="flex items-center gap-2"><button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}><Info className="h-4 w-4"/> Explain</button><button className="btn-ghost" onClick={()=> { const next = !orderOpen; setOrderOpen(next); if (next) computeAppPick(); }}>{orderOpen ? 'Hide' : 'Reveal Choices'}</button></div>
-            </div>
+          </div>
             <div className="mt-1 text-xs text-zinc-600">Note: The app randomly selects among these top options proportional to their scores. The highlighted one is what the mystery egg will reveal.</div>
             {orderOpen && (
               <div className="mt-3 space-y-2">
@@ -1010,7 +1081,7 @@ export default function App() {
                     <div>
                       <div className="flex items-center gap-2">{appPickIdx===idx && <span className="badge">Chosen</span>}<div className="font-medium">{displayTitle(s.meal.dish)} <span className="text-zinc-500">• {displayTitle(s.meal.cuisine, '—')}</span></div></div>
                       <div className="text-xs text-zinc-600">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
-                    </div>
+        </div>
                     <div className="flex gap-2">
                       <button className="btn-primary" onClick={()=> selectFromTopChoice(s.meal)}>Select</button>
                     </div>
@@ -1031,45 +1102,45 @@ export default function App() {
         </div>
         {logTab==='meal' ? (
           <>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <div className="label">Date</div>
-                <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
-              </div>
-              <div>
-                <div className="label">Cost (USD)</div>
-                <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
-              </div>
-              <div>
-                <div className="label">Cuisine</div>
-                <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
-                <datalist id="cuisine-list">
-                  {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
-                </datalist>
-              </div>
-              <div>
-                <div className="label">Restaurant</div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <div className="label">Date</div>
+            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
+          </div>
+          <div>
+            <div className="label">Cost (USD)</div>
+            <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
+          </div>
+          <div>
+            <div className="label">Cuisine</div>
+            <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
+            <datalist id="cuisine-list">
+              {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
+            </datalist>
+          </div>
+          <div>
+            <div className="label">Restaurant</div>
                 <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
                 <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
-              </div>
-              <div>
-                <div className="label">Dish</div>
+          </div>
+          <div>
+            <div className="label">Dish</div>
                 <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
                 <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
-              </div>
-              <div>
-                <div className="label">Rating (1-5)</div>
-                <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
-              </div>
-              <div className="md:col-span-2 lg:col-span-3">
-                <div className="label">Notes</div>
-                <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
-              </div>
+          </div>
+          <div>
+            <div className="label">Rating (1-5)</div>
+            <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
+          </div>
+          <div className="md:col-span-2 lg:col-span-3">
+            <div className="label">Notes</div>
+            <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
+          </div>
               <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
                 Mark as seed (won't count toward spend)
               </label>
-            </div>
+        </div>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
           </>
         ) : (
@@ -1078,23 +1149,79 @@ export default function App() {
               <div>
                 <div className="label">Date</div>
                 <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
-              </div>
+        </div>
               <div>
                 <div className="label">Amount (USD)</div>
                 <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
-              </div>
-              <div>
-                <div className="label">Notes</div>
-                <input className="input" value={gNotes} onChange={e=> setGNotes(e.target.value)} placeholder="e.g., Trader Joe's" />
-              </div>
-            </div>
+      </div>
+              <div className="relative">
+                <div className="label">Store</div>
+                <input 
+                  className="input" 
+                  value={gStore} 
+                  onChange={e=> {
+                    setGStore(e.target.value);
+                    setShowStoreDropdown(e.target.value.trim().length > 0);
+                    setSelectedStoreIndex(-1);
+                  }}
+                  onFocus={() => setShowStoreDropdown(gStore.trim().length > 0)}
+                  onBlur={() => setTimeout(() => setShowStoreDropdown(false), 200)}
+                  onKeyDown={(e) => {
+                    if (!showStoreDropdown || filteredStores.length === 0) return;
+                    
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSelectedStoreIndex(prev => 
+                        prev < filteredStores.length - 1 ? prev + 1 : 0
+                      );
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSelectedStoreIndex(prev => 
+                        prev > 0 ? prev - 1 : filteredStores.length - 1
+                      );
+                    } else if (e.key === 'Enter' && selectedStoreIndex >= 0) {
+                      e.preventDefault();
+                      setGStore(filteredStores[selectedStoreIndex]);
+                      setShowStoreDropdown(false);
+                      setSelectedStoreIndex(-1);
+                    } else if (e.key === 'Escape') {
+                      setShowStoreDropdown(false);
+                      setSelectedStoreIndex(-1);
+                    }
+                  }}
+                  placeholder="e.g., Trader Joe's" 
+                />
+                {showStoreDropdown && filteredStores.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    {filteredStores.map((store, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        className={`block w-full px-3 py-2 text-left hover:bg-zinc-100 focus:bg-zinc-100 focus:outline-none ${
+                          index === selectedStoreIndex ? 'bg-zinc-100' : ''
+                        }`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setSelectedStoreIndex(index)}
+                        onClick={() => {
+                          setGStore(store);
+                          setShowStoreDropdown(false);
+                          setSelectedStoreIndex(-1);
+                        }}
+                      >
+                        {store}
+                      </button>
+                    ))}
+                  </div>
+                )}
+        </div>
+                  </div>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
               const amt = Number(gAmount) || 0;
               if (amt <= 0) { showToast('Enter a valid amount'); return; }
-              await FoodChooserAPI.addGrocery({ date: new Date(gDate).toISOString(), amount: amt, notes: gNotes || null });
+              await FoodChooserAPI.addGrocery({ date: toLocalISOString(gDate), amount: amt, notes: gStore || null });
               const latest = await FoodChooserAPI.getGroceries();
               setGroceries(latest);
-              setGDate(todayISO()); setGAmount('50'); setGNotes('');
+              setGDate(todayISO()); setGAmount('50'); setGStore('');
               showToast('Grocery trip saved');
             }}>Save Trip</button></div>
           </>
@@ -1104,45 +1231,46 @@ export default function App() {
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-semibold">History</div>
             <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button>
-          </div>
-          <div className="overflow-x-auto">
+      </div>
+        <div className="overflow-x-auto">
             {logTab==='meal' ? (
-              <table className="table">
-                <thead>
-                  <tr className="bg-zinc-50">
-                    <th className="th text-left">Date</th>
-                    <th className="th text-left">Cuisine</th>
-                    <th className="th text-left">Restaurant</th>
-                    <th className="th text-left">Dish</th>
-                    <th className="th text-right">Cost</th>
-                    <th className="th text-center">Rating</th>
-                    <th className="th text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+          <table className="table">
+            <thead>
+              <tr className="bg-zinc-50">
+                <th className="th text-left">Date</th>
+                <th className="th text-left">Cuisine</th>
+                <th className="th text-left">Restaurant</th>
+                <th className="th text-left">Dish</th>
+                <th className="th text-right">Cost</th>
+                <th className="th text-center">Rating</th>
+                <th className="th text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
                   {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
-                    <tr key={m.id} className="hover:bg-zinc-50">
+                <tr key={m.id} className="hover:bg-zinc-50">
                       <td className="td">{m.date.slice(0,10)} {isSeedMeal(m) && <span className="text-amber-700">(seed)</span>}</td>
                       <td className="td">{displayTitle(m.cuisine, '—')}</td>
                       <td className="td">{displayTitle(m.restaurant, '—')}</td>
                       <td className="td">{displayTitle(m.dish)}</td>
-                      <td className="td text-right">{currency(m.cost)}</td>
-                      <td className="td text-center">{m.rating ?? '—'}</td>
-                      <td className="td text-center">
+                  <td className="td text-right">{currency(m.cost)}</td>
+                  <td className="td text-center">{m.rating ?? '—'}</td>
+                  <td className="td text-center">
                         <button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button>
                         <button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
             ) : (
               <table className="table">
                 <thead>
                   <tr className="bg-zinc-50">
                     <th className="th text-left">Date</th>
-                    <th className="th text-left">Notes</th>
+                    <th className="th text-left">Store</th>
                     <th className="th text-right">Amount</th>
+                    <th className="th text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1151,6 +1279,9 @@ export default function App() {
                       <td className="td">{g.date.slice(0,10)}</td>
                       <td className="td">{g.notes ?? '—'}</td>
                       <td className="td text-right">{currency(g.amount)}</td>
+                      <td className="td text-center">
+                        <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>Delete</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1181,7 +1312,7 @@ export default function App() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
             <div className="mb-2 text-lg font-semibold">Edit Dinner Entry</div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div><div className="label">Date</div><input className="input" type="datetime-local" value={new Date(editMeal.date).toISOString().slice(0,16)} onChange={e=> setEditMeal({...editMeal, date: new Date(e.target.value).toISOString()})} /></div>
+              <div><div className="label">Date</div><input className="input" type="datetime-local" value={new Date(editMeal.date).toISOString().slice(0,16)} onChange={e=> setEditMeal({...editMeal, date: toLocalISOString(e.target.value.slice(0,10)) })} /></div>
               <div><div className="label">Cost</div><input className="input" type="number" value={String(editMeal.cost)} onChange={e=> setEditMeal({...editMeal, cost: Number(e.target.value)||0})} /></div>
               <div><div className="label">Cuisine</div><input className="input" value={editMeal.cuisine} onChange={e=> setEditMeal({...editMeal, cuisine: e.target.value})} /></div>
               <div><div className="label">Restaurant</div><input className="input" value={editMeal.restaurant ?? ''} onChange={e=> setEditMeal({...editMeal, restaurant: e.target.value||null})} /></div>
@@ -1204,11 +1335,11 @@ export default function App() {
         const monthMapGroceries = new Map<string, number>();
         for (const mm of windowMonths) { monthMapMeals.set(mm, 0); monthMapGroceries.set(mm, 0); }
         for (const meal of meals) {
-          const k = monthKey(new Date(meal.date));
+          const k = getLocalMonthKey(meal.date.slice(0,10));
           if (windowMonths.includes(k) && !isSeedMeal(meal)) monthMapMeals.set(k, (monthMapMeals.get(k) ?? 0) + meal.cost);
         }
         for (const g of groceries) {
-          const k = monthKey(new Date(g.date));
+          const k = getLocalMonthKey(g.date.slice(0,10));
           if (windowMonths.includes(k)) monthMapGroceries.set(k, (monthMapGroceries.get(k) ?? 0) + g.amount);
         }
         const monthData = windowMonths.map(k => ({
@@ -1220,8 +1351,8 @@ export default function App() {
         const totalGroceriesWindow = monthData.reduce((s, d) => s + d.groceries, 0);
         const totalWindow = Math.round((totalMealsWindow + totalGroceriesWindow) * 100) / 100;
         const selectedMonth = windowMonths.includes(spendSelection || '') ? (spendSelection as string) : windowMonths[5];
-        const contributingMeals = meals.filter(m => monthKey(new Date(m.date))===selectedMonth && !isSeedMeal(m));
-        const contributingGroceries = groceries.filter(g => monthKey(new Date(g.date))===selectedMonth);
+        const contributingMeals = meals.filter(m => getLocalMonthKey(m.date.slice(0,10))===selectedMonth && !isSeedMeal(m));
+        const contributingGroceries = groceries.filter(g => getLocalMonthKey(g.date.slice(0,10))===selectedMonth);
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>

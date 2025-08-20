@@ -129,6 +129,22 @@ export class FoodChooserAPI {
     }
   }
 
+  // Groceries
+  static async deleteGrocery(id: string): Promise<void> {
+    checkSupabase()
+    
+    const { error } = await supabase!
+      .from('groceries')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', DEMO_USER_ID)
+
+    if (error) {
+      console.error('Error deleting grocery:', error)
+      throw error
+    }
+  }
+
   // User Preferences
   static async getUserPreferences(): Promise<UserPreferences | null> {
     checkSupabase()
