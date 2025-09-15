@@ -67,52 +67,90 @@ food-chooser-mvp/
 
 This app uses Supabase as the backend database. The database schema includes tables for meals, user preferences, cuisine overrides, and more.
 
-### Setting up Supabase Keepalive (Free Tier)
+### 🚨 Supabase Free Tier Database Keepalive
 
-Since Supabase free tier databases can go to sleep after periods of inactivity, this project includes a GitHub Action that automatically keeps your database alive.
+**Why This is Critical:** Supabase free tier databases automatically **pause after 1 week of inactivity**. When paused:
+- 🛑 Your app will stop working completely
+- 🗃️ Database connections will fail  
+- ⏳ Cold starts can take 10+ seconds to resume
+- 📱 Users will see connection errors
 
-#### 1. Configure GitHub Secrets
+**The Solution:** This project includes an automated GitHub Action cron job that keeps your database warm by pinging it regularly.
+
+#### 🛠️ Setup Instructions
+
+##### 1. Configure GitHub Repository Secrets
 
 Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**
 
-Add these repository secrets:
+Add these two repository secrets:
 
-- **`SUPABASE_URL`** - Your Supabase project URL (e.g., `https://your-project-id.supabase.co`)
-- **`SUPABASE_ANON_KEY`** - Your Supabase anonymous key
+**Secret 1:**
+- **Name:** `SUPABASE_URL`
+- **Value:** Your Supabase project URL (e.g., `https://mkpmlgdxwzvjkubeptmc.supabase.co`)
 
-**To find these values:**
-1. Go to your [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project
+**Secret 2:**
+- **Name:** `SUPABASE_ANON_KEY`  
+- **Value:** Your Supabase anonymous key (starts with `eyJ...`)
+
+**🔍 To find these values:**
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your **specific project** (not organization settings)
 3. Go to **Settings** → **API**
 4. Copy the **Project URL** (for `SUPABASE_URL`)
 5. Copy the **anon public** key (for `SUPABASE_ANON_KEY`)
 
-#### 2. How the Keepalive Works
+##### 2. How the Cron Job Works
 
-The GitHub Action (`.github/workflows/keep-supabase-alive.yml`) runs automatically:
+The automated workflow (`.github/workflows/keep-supabase-alive.yml`) runs on this schedule:
 
-- **Every 30 minutes** during active hours (6 AM - 11 PM UTC)
-- **Every 2 hours** during off-hours (12 AM - 5 AM UTC)
+```yaml
+# Smart scheduling to optimize usage
+- cron: "*/30 6-23 * * *"  # Every 30 minutes during active hours (6 AM - 11 PM UTC)
+- cron: "0 0-5/2 * * *"    # Every 2 hours during off-hours (12 AM - 5 AM UTC)
+```
 
-The workflow performs two types of health checks:
-1. **Auth Health Check** - Pings the Supabase auth service
-2. **Database Query** - Makes a lightweight query to your `user_preferences` table to keep PostgREST warm
+**What it does:**
+1. **✅ Environment Validation** - Checks that both secrets are properly configured
+2. **🏥 REST API Health Check** - Pings `/rest/v1/` to verify the API is responding  
+3. **🔥 Database Warmup** - Queries your `user_preferences` table to keep PostgREST connections warm
+4. **📊 Detailed Logging** - Reports success/failure with HTTP status codes and response data
 
-#### 3. Manual Testing
+**Benefits:**
+- 🚀 Prevents database pausing
+- ⚡ Eliminates cold start delays
+- 🔒 Uses lightweight, safe read-only queries
+- 💰 Minimizes resource usage during off-hours
+- 🛡️ Built-in error handling and retry logic
 
-You can manually trigger the keepalive workflow:
+##### 3. Testing & Monitoring
+
+**Manual Testing:**
 1. Go to your GitHub repository → **Actions** tab
-2. Click on **"Keep Supabase Database Alive"**
-3. Click **"Run workflow"** → **"Run workflow"**
+2. Look for **"Keep Supabase Database Alive"** workflow
+3. Click **"Run workflow"** → **"Run workflow"** to test immediately
 
-#### 4. Monitoring
+**Automatic Monitoring:**
+- Check the **Actions** tab regularly to view cron job runs
+- ✅ **Green checkmarks** = Successful keepalive
+- ❌ **Red X marks** = Failed runs (check logs for issues)  
+- 🟡 **Yellow circles** = Currently running
 
-Check the **Actions** tab in your GitHub repository to see the keepalive runs. Each run will show:
-- ✅ Successful pings and database queries
-- ⚠️ Any failures or issues
-- 📊 Response data from your database
+**Troubleshooting:**
+- If you see 401 errors, verify your `SUPABASE_ANON_KEY` is correct
+- If you see 404 errors, verify your `SUPABASE_URL` is correct
+- Check that both secrets are added to your repository (not organization) settings
 
-The workflow automatically handles retries and provides detailed logging to help debug any issues.
+##### 4. Cost & Usage Impact
+
+This keepalive strategy is designed to be **free-tier friendly**:
+- Uses only 2-3 KB of bandwidth per ping
+- Makes simple read queries that don't affect your database limits  
+- Reduces pings during off-hours to conserve resources
+- Prevents the much more expensive cost of database cold starts
+
+**Without keepalive:** Users face 10+ second delays when your database resumes from pause.  
+**With keepalive:** Your app stays responsive 24/7. 🎯
 
 ## Build for Production
 ```bash
