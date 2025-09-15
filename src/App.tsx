@@ -621,7 +621,8 @@ export default function App() {
   const [purchaserName, setPurchaserName] = useState<string>('');
   const [logTab, setLogTab] = useState<'meal'|'grocery'>('meal');
   // Contributions tab state
-  const [contributionsDateRange, setContributionsDateRange] = useState<number>(30); // days
+  const [contributionsDateRange, setContributionsDateRange] = useState<'mtd' | 'all' | 'custom'>('mtd');
+  const [customDays, setCustomDays] = useState<string>('30');
 
   function titleCase(s: string) {
     return s
@@ -918,21 +919,63 @@ export default function App() {
                 <div className="text-sm font-semibold">💰 Spending Contributions</div>
                 <div className="text-xs text-zinc-600 mt-1">See who's been buying meals and groceries</div>
               </div>
-              <div className="flex gap-2">
-                {[7, 30, 60, 90].map(days => (
-                  <button 
-                    key={days}
-                    className={`btn-ghost text-xs ${contributionsDateRange === days ? 'border border-zinc-300' : ''}`}
-                    onClick={() => setContributionsDateRange(days)}
-                  >
-                    {days}d
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <button 
+                  className={`btn-ghost text-xs ${contributionsDateRange === 'mtd' ? 'border border-zinc-300' : ''}`}
+                  onClick={() => setContributionsDateRange('mtd')}
+                >
+                  Month to Date
+                </button>
+                <button 
+                  className={`btn-ghost text-xs ${contributionsDateRange === 'all' ? 'border border-zinc-300' : ''}`}
+                  onClick={() => setContributionsDateRange('all')}
+                >
+                  All Time
+                </button>
+                <button 
+                  className={`btn-ghost text-xs ${contributionsDateRange === 'custom' ? 'border border-zinc-300' : ''}`}
+                  onClick={() => setContributionsDateRange('custom')}
+                >
+                  Custom
+                </button>
+                {contributionsDateRange === 'custom' && (
+                  <div className="flex items-center gap-1">
+                    <input 
+                      className="input text-xs w-16" 
+                      type="number" 
+                      min="1" 
+                      max="999"
+                      value={customDays} 
+                      onChange={e => setCustomDays(e.target.value)}
+                      placeholder="30"
+                    />
+                    <span className="text-xs text-zinc-600">days</span>
+                  </div>
+                )}
               </div>
             </div>
 
             {(() => {
-              const cutoffDate = new Date(Date.now() - contributionsDateRange * 24 * 60 * 60 * 1000);
+              // Calculate cutoff date based on selected range
+              let cutoffDate: Date;
+              let dateLabel: string;
+              
+              if (contributionsDateRange === 'mtd') {
+                // Month to date - start of current month
+                const now = new Date();
+                cutoffDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                dateLabel = `Month to Date (${cutoffDate.toLocaleDateString()})`;
+              } else if (contributionsDateRange === 'all') {
+                // All time - use a very old date to include everything
+                cutoffDate = new Date(2020, 0, 1);
+                dateLabel = 'All Time';
+              } else {
+                // Custom days
+                const days = Math.max(1, parseInt(customDays) || 30);
+                cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+                dateLabel = `Past ${days} day${days === 1 ? '' : 's'}`;
+              }
+
               const recentMeals = meals.filter(m => new Date(m.date) >= cutoffDate && !isSeedMeal(m));
               const recentGroceries = groceries.filter(g => new Date(g.date) >= cutoffDate);
 
@@ -981,6 +1024,13 @@ export default function App() {
 
               return (
                 <div className="space-y-6">
+                  {/* Date Range Label */}
+                  <div className="text-center">
+                    <div className="inline-block px-3 py-1 bg-blue-50 text-blue-800 rounded-full text-sm font-medium">
+                      📅 {dateLabel}
+                    </div>
+                  </div>
+
                   {/* Summary Cards */}
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="rounded-lg border p-4">
