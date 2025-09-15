@@ -34,6 +34,7 @@ export interface Database {
           rating: number | null
           notes: string | null
           seed_only: boolean
+          purchaser_name: string
           created_at: string
           updated_at: string
         }
@@ -48,6 +49,7 @@ export interface Database {
           rating?: number | null
           notes?: string | null
           seed_only?: boolean
+          purchaser_name?: string
           created_at?: string
           updated_at?: string
         }
@@ -62,6 +64,7 @@ export interface Database {
           rating?: number | null
           notes?: string | null
           seed_only?: boolean
+          purchaser_name?: string
           created_at?: string
           updated_at?: string
         }
@@ -164,6 +167,7 @@ export interface Database {
           date: string
           amount: number
           notes: string | null
+          purchaser_name: string
           created_at: string
           updated_at: string
         }
@@ -173,6 +177,7 @@ export interface Database {
           date: string
           amount: number
           notes?: string | null
+          purchaser_name?: string
           created_at?: string
           updated_at?: string
         }
@@ -182,8 +187,34 @@ export interface Database {
           date?: string
           amount?: number
           notes?: string | null
+          purchaser_name?: string
           created_at?: string
           updated_at?: string
+        }
+      }
+    }
+    Views: {
+      spending_summary: {
+        Row: {
+          purchaser_name: string
+          category: string
+          transaction_count: number
+          total_amount: number
+          avg_amount: number
+          min_amount: number
+          max_amount: number
+          earliest_date: string
+          latest_date: string
+        }
+      }
+      person_totals: {
+        Row: {
+          purchaser_name: string
+          total_transactions: number
+          total_spent: number
+          avg_per_category: number
+          first_purchase: string
+          last_purchase: string
         }
       }
     }

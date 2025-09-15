@@ -95,11 +95,11 @@ function pseudoWeatherFallback(): Weather {
 function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
 
 const seedMeals: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
-  { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null, seed_only: false },
-  { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null, seed_only: false },
-  { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null, seed_only: false },
-  { date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3, notes: null, seed_only: false },
-  { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null, seed_only: false },
+  { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null, seed_only: false, purchaser_name: 'Unknown' },
+  { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null, seed_only: false, purchaser_name: 'Unknown' },
+  { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null, seed_only: false, purchaser_name: 'Unknown' },
+  { date: new Date(Date.now()-86400000*2).toISOString(), cuisine:'American', dish:'Smash Burger', restaurant:'Burger Bros', cost:16.0, rating:3, notes: null, seed_only: false, purchaser_name: 'Unknown' },
+  { date: new Date(Date.now()-86400000*1).toISOString(), cuisine:'Thai', dish:'Pad See Ew', restaurant:'Thai Basil', cost:18.5, rating:5, notes: null, seed_only: false, purchaser_name: 'Unknown' },
 ];
 
 function buildRecommendations(
@@ -186,8 +186,8 @@ export default function App() {
   const [overrides, setOverrides] = useState<Overrides>({});
   const [isOverride, setIsOverride] = useState(false);
 
-  // Tabs: Home (default) and Browse (right)
-  const [activeTab, setActiveTab] = useState<'home'|'browse'|'how'>('home');
+  // Tabs: Home (default), Browse, Contributions, and How
+  const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'|'how'>('home');
   const [browseSearch, setBrowseSearch] = useState('');
   const [orderOpen, setOrderOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
@@ -494,7 +494,8 @@ export default function App() {
       cost: m.cost,
       rating: m.rating ?? null,
       notes: m.notes ?? null,
-      seed_only: false
+      seed_only: false,
+      purchaser_name: 'Unknown'
     });
     showToast('Logged to Meal History');
   }
@@ -507,7 +508,8 @@ export default function App() {
       cost: r.estCost,
       rating: null,
       notes: null,
-      seed_only: false
+      seed_only: false,
+      purchaser_name: 'Unknown'
     });
     showToast('Logged to Meal History');
   }
@@ -523,6 +525,7 @@ export default function App() {
       rating: m.rating ?? null,
       notes: m.notes ?? null,
       seed_only: false,
+      purchaser_name: 'Unknown'
     });
     showToast('Selected! Added to your Meal History.');
   }
@@ -615,7 +618,10 @@ export default function App() {
   const [rating, setRating] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
   const [seedFlag, setSeedFlag] = useState<boolean>(false);
+  const [purchaserName, setPurchaserName] = useState<string>('');
   const [logTab, setLogTab] = useState<'meal'|'grocery'>('meal');
+  // Contributions tab state
+  const [contributionsDateRange, setContributionsDateRange] = useState<number>(30); // days
 
   function titleCase(s: string) {
     return s
@@ -643,16 +649,17 @@ export default function App() {
       cost: Math.max(0, Number(cost) || 0), 
       rating, 
       notes: (seeded ? `${SEED_TAG} ` : '') + (notes || '') || null,
-      seed_only: seeded
+      seed_only: seeded,
+      purchaser_name: purchaserName.trim() || 'Unknown'
     };
     await addMeal(mealData);
-    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false);
+    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false); setPurchaserName('');
   }
 
   async function handleOrder(rec: Recommendation) {
     try {
       setError(null);
-      const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null, seed_only: false };
+      const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null, seed_only: false, purchaser_name: 'Unknown' };
       await addMeal(mealData);
       if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount); }
     setIsOverride(false);
@@ -680,7 +687,7 @@ export default function App() {
     const entry = browseEntries.find(e => e.key === key);
     if (!entry) return;
     const latest = entry.latest;
-    await addMeal({ date: new Date().toISOString(), restaurant: latest.restaurant, dish: latest.dish, cuisine: latest.cuisine, cost: latest.cost, rating: latest.rating ?? null, notes: latest.notes ?? null, seed_only: false });
+    await addMeal({ date: new Date().toISOString(), restaurant: latest.restaurant, dish: latest.dish, cuisine: latest.cuisine, cost: latest.cost, rating: latest.rating ?? null, notes: latest.notes ?? null, seed_only: false, purchaser_name: 'Unknown' });
   }
 
   // Browse: delete entire group with confirmation (removes all history for that item)
@@ -715,7 +722,8 @@ export default function App() {
           cost: editMeal.cost,
           rating: editMeal.rating ?? null,
           notes: editMeal.notes ?? null,
-          seed_only: (editMeal as any).seed_only === true
+          seed_only: (editMeal as any).seed_only === true,
+          purchaser_name: editMeal.purchaser_name || 'Unknown'
         };
         const created = await FoodChooserAPI.addMeal(newData);
         setMeals(prev => [created, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
@@ -730,7 +738,8 @@ export default function App() {
           cuisine: editMeal.cuisine,
           cost: editMeal.cost,
           rating: editMeal.rating ?? null,
-          notes: editMeal.notes ?? null
+          notes: editMeal.notes ?? null,
+          purchaser_name: editMeal.purchaser_name || 'Unknown'
         });
         setMeals(prev => prev.map(m => m.id === updated.id ? updated : m).sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
         setEditMeal(null);
@@ -894,12 +903,203 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-2">
           <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
           <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
+          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>
           <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
           <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
       </header>
 
-      {activeTab==='browse' ? (
+      {activeTab==='contributions' ? (
+        <div className="space-y-6">
+          {/* Contributions Tab Content */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-sm font-semibold">💰 Spending Contributions</div>
+                <div className="text-xs text-zinc-600 mt-1">See who's been buying meals and groceries</div>
+              </div>
+              <div className="flex gap-2">
+                {[7, 30, 60, 90].map(days => (
+                  <button 
+                    key={days}
+                    className={`btn-ghost text-xs ${contributionsDateRange === days ? 'border border-zinc-300' : ''}`}
+                    onClick={() => setContributionsDateRange(days)}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(() => {
+              const cutoffDate = new Date(Date.now() - contributionsDateRange * 24 * 60 * 60 * 1000);
+              const recentMeals = meals.filter(m => new Date(m.date) >= cutoffDate && !isSeedMeal(m));
+              const recentGroceries = groceries.filter(g => new Date(g.date) >= cutoffDate);
+
+              // Calculate spending by person
+              const spendingByPerson: Record<string, { meals: number, groceries: number, total: number }> = {};
+              
+              // Process meals
+              recentMeals.forEach(m => {
+                const person = m.purchaser_name || 'Unknown';
+                if (!spendingByPerson[person]) {
+                  spendingByPerson[person] = { meals: 0, groceries: 0, total: 0 };
+                }
+                spendingByPerson[person].meals += m.cost;
+                spendingByPerson[person].total += m.cost;
+              });
+
+              // Process groceries
+              recentGroceries.forEach(g => {
+                const person = g.purchaser_name || 'Unknown';
+                if (!spendingByPerson[person]) {
+                  spendingByPerson[person] = { meals: 0, groceries: 0, total: 0 };
+                }
+                spendingByPerson[person].groceries += g.amount;
+                spendingByPerson[person].total += g.amount;
+              });
+
+              const people = Object.keys(spendingByPerson);
+              const totalSpending = Object.values(spendingByPerson).reduce((sum, p) => sum + p.total, 0);
+
+              const getPersonColor = (person: string) => {
+                switch (person) {
+                  case 'Ryan': return { bg: 'bg-blue-500', light: 'bg-blue-100', text: 'text-blue-800' };
+                  case 'Rachel': return { bg: 'bg-purple-500', light: 'bg-purple-100', text: 'text-purple-800' };
+                  default: return { bg: 'bg-gray-500', light: 'bg-gray-100', text: 'text-gray-600' };
+                }
+              };
+
+              if (people.length === 0) {
+                return (
+                  <div className="text-center py-8 text-zinc-600">
+                    <div className="text-lg mb-2">No spending data found</div>
+                    <div className="text-sm">Try selecting a longer time period or add some meals/groceries with purchaser names</div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-lg border p-4">
+                      <div className="text-sm font-semibold text-orange-800">🍽️ Meals</div>
+                      <div className="text-2xl font-bold text-orange-600">
+                        ${Object.values(spendingByPerson).reduce((sum, p) => sum + p.meals, 0).toFixed(2)}
+                      </div>
+                      <div className="text-xs text-zinc-600">{recentMeals.length} transactions</div>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <div className="text-sm font-semibold text-green-800">🛒 Groceries</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        ${Object.values(spendingByPerson).reduce((sum, p) => sum + p.groceries, 0).toFixed(2)}
+                      </div>
+                      <div className="text-xs text-zinc-600">{recentGroceries.length} transactions</div>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <div className="text-sm font-semibold text-blue-800">💳 Total</div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        ${totalSpending.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-zinc-600">{recentMeals.length + recentGroceries.length} transactions</div>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Charts */}
+                  <div className="space-y-6">
+                    {/* Meals Chart */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3 text-orange-800">🍽️ Meal Spending by Person</h3>
+                      <div className="space-y-3">
+                        {people.sort((a, b) => spendingByPerson[b].meals - spendingByPerson[a].meals).map(person => {
+                          const amount = spendingByPerson[person].meals;
+                          const maxAmount = Math.max(...Object.values(spendingByPerson).map(p => p.meals));
+                          const percentage = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
+                          const colors = getPersonColor(person);
+                          
+                          return (
+                            <div key={`meals-${person}`} className="flex items-center gap-3">
+                              <div className="w-20 text-sm font-medium">{person}</div>
+                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                                <div 
+                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                                  style={{ width: `${percentage}%` }}
+                                >
+                                  <span className="text-white text-xs font-medium">
+                                    ${amount.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Groceries Chart */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3 text-green-800">🛒 Grocery Spending by Person</h3>
+                      <div className="space-y-3">
+                        {people.sort((a, b) => spendingByPerson[b].groceries - spendingByPerson[a].groceries).map(person => {
+                          const amount = spendingByPerson[person].groceries;
+                          const maxAmount = Math.max(...Object.values(spendingByPerson).map(p => p.groceries));
+                          const percentage = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
+                          const colors = getPersonColor(person);
+                          
+                          return (
+                            <div key={`groceries-${person}`} className="flex items-center gap-3">
+                              <div className="w-20 text-sm font-medium">{person}</div>
+                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                                <div 
+                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                                  style={{ width: `${percentage}%` }}
+                                >
+                                  <span className="text-white text-xs font-medium">
+                                    ${amount.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Total Chart */}
+                    <div>
+                      <h3 className="text-sm font-semibold mb-3 text-blue-800">💳 Total Spending by Person</h3>
+                      <div className="space-y-3">
+                        {people.sort((a, b) => spendingByPerson[b].total - spendingByPerson[a].total).map(person => {
+                          const amount = spendingByPerson[person].total;
+                          const percentage = totalSpending > 0 ? (amount / totalSpending) * 100 : 0;
+                          const colors = getPersonColor(person);
+                          
+                          return (
+                            <div key={`total-${person}`} className="flex items-center gap-3">
+                              <div className="w-20 text-sm font-medium">{person}</div>
+                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                                <div 
+                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                                  style={{ width: `${percentage}%` }}
+                                >
+                                  <span className="text-white text-xs font-medium">
+                                    ${amount.toFixed(2)} ({percentage.toFixed(1)}%)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      ) : activeTab==='browse' ? (
         <div className="card p-5">
           <div className="text-sm font-semibold mb-2">Browse Meals</div>
           <div className="mt-1 flex items-center gap-2">
@@ -1132,6 +1332,10 @@ export default function App() {
             <div className="label">Rating (1-5)</div>
             <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
           </div>
+          <div>
+            <div className="label">Who Paid?</div>
+            <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
+          </div>
           <div className="md:col-span-2 lg:col-span-3">
             <div className="label">Notes</div>
             <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
@@ -1145,7 +1349,7 @@ export default function App() {
           </>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div>
                 <div className="label">Date</div>
                 <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
@@ -1154,6 +1358,10 @@ export default function App() {
                 <div className="label">Amount (USD)</div>
                 <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
       </div>
+              <div>
+                <div className="label">Who Paid?</div>
+                <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
+              </div>
               <div className="relative">
                 <div className="label">Store</div>
                 <input 
@@ -1218,10 +1426,15 @@ export default function App() {
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
               const amt = Number(gAmount) || 0;
               if (amt <= 0) { showToast('Enter a valid amount'); return; }
-              await FoodChooserAPI.addGrocery({ date: toLocalISOString(gDate), amount: amt, notes: gStore || null });
+              await FoodChooserAPI.addGrocery({ 
+                date: toLocalISOString(gDate), 
+                amount: amt, 
+                notes: gStore || null,
+                purchaser_name: purchaserName.trim() || 'Unknown'
+              });
               const latest = await FoodChooserAPI.getGroceries();
               setGroceries(latest);
-              setGDate(todayISO()); setGAmount('50'); setGStore('');
+              setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
               showToast('Grocery trip saved');
             }}>Save Trip</button></div>
           </>
@@ -1242,6 +1455,7 @@ export default function App() {
                 <th className="th text-left">Restaurant</th>
                 <th className="th text-left">Dish</th>
                 <th className="th text-right">Cost</th>
+                <th className="th text-center">Who Paid?</th>
                 <th className="th text-center">Rating</th>
                 <th className="th text-center">Actions</th>
               </tr>
@@ -1254,6 +1468,15 @@ export default function App() {
                       <td className="td">{displayTitle(m.restaurant, '—')}</td>
                       <td className="td">{displayTitle(m.dish)}</td>
                   <td className="td text-right">{currency(m.cost)}</td>
+                  <td className="td text-center">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      m.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800' :
+                      m.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {m.purchaser_name || 'Unknown'}
+                    </span>
+                  </td>
                   <td className="td text-center">{m.rating ?? '—'}</td>
                   <td className="td text-center">
                         <button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button>
@@ -1270,6 +1493,7 @@ export default function App() {
                     <th className="th text-left">Date</th>
                     <th className="th text-left">Store</th>
                     <th className="th text-right">Amount</th>
+                    <th className="th text-center">Who Paid?</th>
                     <th className="th text-center">Actions</th>
                   </tr>
                 </thead>
@@ -1279,6 +1503,15 @@ export default function App() {
                       <td className="td">{g.date.slice(0,10)}</td>
                       <td className="td">{g.notes ?? '—'}</td>
                       <td className="td text-right">{currency(g.amount)}</td>
+                      <td className="td text-center">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          g.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800' :
+                          g.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {g.purchaser_name || 'Unknown'}
+                        </span>
+                      </td>
                       <td className="td text-center">
                         <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>Delete</button>
                       </td>
