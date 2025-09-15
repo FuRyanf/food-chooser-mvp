@@ -1,6 +1,9 @@
 name: Keep Supabase Database Alive
 
 on:
+  push:
+    paths:
+      - '.github/workflows/keep-supabase-alive.yml'
   schedule:
     # Every 30 minutes during active hours (6 AM - 11 PM UTC)
     # This reduces unnecessary pings during low-usage hours
