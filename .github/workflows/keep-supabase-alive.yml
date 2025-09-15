@@ -35,22 +35,25 @@ jobs:
           
           echo "✅ Environment variables validated"
 
-      - name: Ping Supabase Auth Health
+      - name: Ping Supabase REST API
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "🏥 Pinging Supabase Auth health endpoint..."
+          echo "🏥 Pinging Supabase REST API..."
           
+          # Use REST API health check instead of auth
           response=$(curl --fail --silent --show-error --max-time 15 \
             --write-out "HTTPSTATUS:%{http_code}" \
-            "${SUPABASE_URL}/auth/v1/health")
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/")
           
           http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
           
           if [ "$http_code" -eq 200 ]; then
-            echo "✅ Auth service is healthy (HTTP $http_code)"
+            echo "✅ REST API is healthy (HTTP $http_code)"
           else
-            echo "⚠️  Auth service returned HTTP $http_code"
+            echo "⚠️  REST API returned HTTP $http_code"
             exit 1
           fi
 
