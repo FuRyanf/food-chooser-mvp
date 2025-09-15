@@ -1,0 +1,85 @@
+name: Keep Supabase Database Alive
+
+on:
+  schedule:
+    # Every 30 minutes during active hours (6 AM - 11 PM UTC)
+    # This reduces unnecessary pings during low-usage hours
+    - cron: "*/30 6-23 * * *"  
+    # Every 2 hours during off-hours (12 AM - 5 AM UTC)
+    - cron: "0 0-5/2 * * *"
+  workflow_dispatch: {}  # Allows manual trigger from Actions tab
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    
+    steps:
+      - name: Validate Environment Variables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ]; then
+            echo "❌ SUPABASE_URL secret is not set"
+            exit 1
+          fi
+          
+          if [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "❌ SUPABASE_ANON_KEY secret is not set" 
+            exit 1
+          fi
+          
+          echo "✅ Environment variables validated"
+
+      - name: Ping Supabase Auth Health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          echo "🏥 Pinging Supabase Auth health endpoint..."
+          
+          response=$(curl --fail --silent --show-error --max-time 15 \
+            --write-out "HTTPSTATUS:%{http_code}" \
+            "${SUPABASE_URL}/auth/v1/health")
+          
+          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Auth service is healthy (HTTP $http_code)"
+          else
+            echo "⚠️  Auth service returned HTTP $http_code"
+            exit 1
+          fi
+
+      - name: Keep PostgREST Warm
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "🔥 Warming up PostgREST with database query..."
+          
+          # Query the user_preferences table (small table with demo data)
+          response=$(curl --fail --silent --show-error --max-time 20 \
+            --write-out "HTTPSTATUS:%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            "${SUPABASE_URL}/rest/v1/user_preferences?select=user_id&limit=1")
+          
+          http_code=$(echo $response | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+          body=$(echo $response | sed -E 's/HTTPSTATUS:[0-9]{3}$//')
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ PostgREST query successful (HTTP $http_code)"
+            echo "📊 Response: $body"
+          else
+            echo "⚠️  PostgREST query failed (HTTP $http_code)"
+            echo "📄 Response: $body"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "🎉 Keepalive completed successfully!"
+          echo "⏰ Next run scheduled in 30 minutes (or 2 hours during off-hours)"
+          echo "🔧 You can manually trigger this workflow from the Actions tab"

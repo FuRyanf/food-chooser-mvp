@@ -63,6 +63,57 @@ food-chooser-mvp/
 - Tier Colors – Configurable in `TIER_GRADIENT` inside `EggGacha.tsx`.
 - Animation Timings – Controlled via `setTimeout` hooks in `EggGacha`.
 
+## Supabase Database Setup
+
+This app uses Supabase as the backend database. The database schema includes tables for meals, user preferences, cuisine overrides, and more.
+
+### Setting up Supabase Keepalive (Free Tier)
+
+Since Supabase free tier databases can go to sleep after periods of inactivity, this project includes a GitHub Action that automatically keeps your database alive.
+
+#### 1. Configure GitHub Secrets
+
+Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions**
+
+Add these repository secrets:
+
+- **`SUPABASE_URL`** - Your Supabase project URL (e.g., `https://your-project-id.supabase.co`)
+- **`SUPABASE_ANON_KEY`** - Your Supabase anonymous key
+
+**To find these values:**
+1. Go to your [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project
+3. Go to **Settings** → **API**
+4. Copy the **Project URL** (for `SUPABASE_URL`)
+5. Copy the **anon public** key (for `SUPABASE_ANON_KEY`)
+
+#### 2. How the Keepalive Works
+
+The GitHub Action (`.github/workflows/keep-supabase-alive.yml`) runs automatically:
+
+- **Every 30 minutes** during active hours (6 AM - 11 PM UTC)
+- **Every 2 hours** during off-hours (12 AM - 5 AM UTC)
+
+The workflow performs two types of health checks:
+1. **Auth Health Check** - Pings the Supabase auth service
+2. **Database Query** - Makes a lightweight query to your `user_preferences` table to keep PostgREST warm
+
+#### 3. Manual Testing
+
+You can manually trigger the keepalive workflow:
+1. Go to your GitHub repository → **Actions** tab
+2. Click on **"Keep Supabase Database Alive"**
+3. Click **"Run workflow"** → **"Run workflow"**
+
+#### 4. Monitoring
+
+Check the **Actions** tab in your GitHub repository to see the keepalive runs. Each run will show:
+- ✅ Successful pings and database queries
+- ⚠️ Any failures or issues
+- 📊 Response data from your database
+
+The workflow automatically handles retries and provides detailed logging to help debug any issues.
+
 ## Build for Production
 ```bash
 npm run build
