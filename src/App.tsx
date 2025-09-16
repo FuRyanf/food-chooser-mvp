@@ -1601,7 +1601,8 @@ export default function App() {
               <div><div className="label">Restaurant</div><input className="input" value={editMeal.restaurant ?? ''} onChange={e=> setEditMeal({...editMeal, restaurant: e.target.value||null})} /></div>
               <div><div className="label">Dish</div><input className="input" value={editMeal.dish} onChange={e=> setEditMeal({...editMeal, dish: e.target.value})} /></div>
               <div><div className="label">Rating</div><input className="input" type="number" min={1} max={5} value={String(editMeal.rating ?? '')} onChange={e=> setEditMeal({...editMeal, rating: e.target.value? Number(e.target.value): null})} /></div>
-              <div className="md:col-span-2"><div className="label">Notes</div><textarea className="input" rows={2} value={editMeal.notes ?? ''} onChange={e=> setEditMeal({...editMeal, notes: e.target.value||null})} /></div>
+              <div><div className="label">Who Paid?</div><input className="input" value={editMeal.purchaser_name ?? ''} onChange={e=> setEditMeal({...editMeal, purchaser_name: e.target.value||'Unknown'})} placeholder="e.g., Ryan, Rachel" /></div>
+              <div><div className="label">Notes</div><textarea className="input" rows={2} value={editMeal.notes ?? ''} onChange={e=> setEditMeal({...editMeal, notes: e.target.value||null})} /></div>
             </div>
             <div className="mt-4 flex justify-end gap-2"><button className="btn-ghost" onClick={()=> setEditMeal(null)}>Cancel</button><button className="btn-primary" disabled={editSaving} onClick={saveEdit}>{editSaving ? 'Saving…' : 'Save'}</button></div>
           </div>
