@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { DollarSign, Egg, Filter, History, Info, Sparkles, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DollarSign, Egg, Filter, History, Info, Moon, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
@@ -23,6 +23,16 @@ type Recommendation = {
 type Overrides = Record<string, number>;
 
 const currency = (n:number)=> `$${n.toFixed(2)}`;
+
+const THEME_STORAGE_KEY = 'fudi.theme';
+
+function resolveInitialTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'light';
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark') return stored;
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  return prefersDark ? 'dark' : 'light';
+}
 
 // Los Angeles timezone helpers
 function toLocalDate(dateString: string): Date {
@@ -185,6 +195,44 @@ export default function App() {
   const [picked, setPicked] = useState<Recommendation | undefined>();
   const [overrides, setOverrides] = useState<Overrides>({});
   const [isOverride, setIsOverride] = useState(false);
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const initialTheme = resolveInitialTheme();
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', initialTheme === 'dark');
+    }
+    return initialTheme;
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try { window.localStorage.setItem(THEME_STORAGE_KEY, theme); } catch {/* ignore storage errors */}
+  }, [theme]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function handlePointer(event: MouseEvent) {
+      if (!settingsRef.current) return;
+      if (!settingsRef.current.contains(event.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    }
+    document.addEventListener('mousedown', handlePointer);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [settingsOpen]);
+
+  const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  const isDarkTheme = theme === 'dark';
 
   // Tabs: Home (default), Browse, Contributions, and How
   const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'|'how'>('home');
@@ -890,7 +938,7 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 text-zinc-900 transition-colors duration-300 dark:text-zinc-100 md:p-8">
       <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
           <div className="flex items-center gap-2">
@@ -899,13 +947,38 @@ export default function App() {
             <Sparkles className="h-6 w-6" />
             <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
           </div>
-          <p className="text-sm text-zinc-600">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('home')}>Home</button>
-          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
-          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>
-          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
+          <div className="relative" ref={settingsRef}>
+            <button
+              type="button"
+              className={`btn-ghost ${settingsOpen ? 'border border-zinc-300 dark:border-zinc-700' : ''}`}
+              onClick={() => setSettingsOpen(prev => !prev)}
+              aria-haspopup="true"
+              aria-expanded={settingsOpen}
+              aria-label="Open settings"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </button>
+            {settingsOpen && (
+              <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Theme</span>
+                  <button type="button" className="btn-outline text-xs" onClick={toggleTheme}>
+                    {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                    {isDarkTheme ? 'Light' : 'Dark'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Switch between light and dark experiences.</p>
+              </div>
+            )}
+          </div>
+          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('home')}>Home</button>
+          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
+          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>
+          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
           <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
       </header>
