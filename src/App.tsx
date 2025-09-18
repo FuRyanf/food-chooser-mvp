@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
@@ -1148,128 +1148,195 @@ export default function App() {
               }
 
               return (
-                <div className="space-y-6">
-                  {/* Date Range Label */}
-                  <div className="text-center">
-                    <div className="inline-block px-3 py-1 bg-blue-50 text-blue-800 rounded-full text-sm font-medium">
-                      📅 {dateLabel}
-                    </div>
-                  </div>
+                (() => {
+                  const palette = ['#6366f1', '#a855f7', '#22c55e', '#f97316', '#0ea5e9', '#f59e0b'];
+                  const mealCountByPerson: Record<string, number> = {};
+                  const groceryCountByPerson: Record<string, number> = {};
+                  recentMeals.forEach(m => {
+                    const person = m.purchaser_name || 'Unknown';
+                    mealCountByPerson[person] = (mealCountByPerson[person] ?? 0) + 1;
+                  });
+                  recentGroceries.forEach(g => {
+                    const person = g.purchaser_name || 'Unknown';
+                    groceryCountByPerson[person] = (groceryCountByPerson[person] ?? 0) + 1;
+                  });
+                  const stackedData = people.map((person, idx) => {
+                    const mealsAmount = Number(spendingByPerson[person].meals.toFixed(2));
+                    const groceriesAmount = Number(spendingByPerson[person].groceries.toFixed(2));
+                    const totalAmount = Number(spendingByPerson[person].total.toFixed(2));
+                    return {
+                      person,
+                      Meals: mealsAmount,
+                      Groceries: groceriesAmount,
+                      Total: totalAmount,
+                      color: palette[idx % palette.length],
+                      mealCount: mealCountByPerson[person] ?? 0,
+                      groceryCount: groceryCountByPerson[person] ?? 0,
+                    };
+                  });
+                  const totalMealsAmount = stackedData.reduce((sum, d) => sum + d.Meals, 0);
+                  const totalGroceriesAmount = stackedData.reduce((sum, d) => sum + d.Groceries, 0);
+                  const pieData = stackedData.map((d, idx) => ({ name: d.person, value: d.Total, fill: palette[idx % palette.length] }));
+                  const axisColor = theme === 'dark' ? '#e4e4e7' : '#3f3f46';
+                  const gridColor = theme === 'dark' ? '#3f3f46' : '#e4e4e7';
+                  const shareFormatter = (value: number) => totalSpending ? `${((value / totalSpending) * 100).toFixed(1)}%` : '0.0%';
+                  const activity = [
+                    ...recentMeals.map(m => ({
+                      id: `m-${m.id}`,
+                      type: 'Meal' as const,
+                      label: m.dish || 'Meal',
+                      place: m.restaurant || '—',
+                      person: m.purchaser_name || 'Unknown',
+                      amount: m.cost,
+                      date: new Date(m.date),
+                    })),
+                    ...recentGroceries.map(g => ({
+                      id: `g-${g.id}`,
+                      type: 'Grocery' as const,
+                      label: g.notes || 'Groceries',
+                      place: g.notes || 'Groceries',
+                      person: g.purchaser_name || 'Unknown',
+                      amount: g.amount,
+                      date: new Date(g.date),
+                    })),
+                  ]
+                    .sort((a, b) => b.date.getTime() - a.date.getTime())
+                    .slice(0, 6);
 
-                  {/* Summary Cards */}
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <div className="rounded-lg border p-4">
-                      <div className="text-sm font-semibold text-orange-800">🍽️ Meals</div>
-                      <div className="text-2xl font-bold text-orange-600">
-                        ${Object.values(spendingByPerson).reduce((sum, p) => sum + p.meals, 0).toFixed(2)}
+                  return (
+                    <div className="space-y-8">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
+                          📅 {dateLabel}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                          <span>{recentMeals.length} meal txns</span>
+                          <span>•</span>
+                          <span>{recentGroceries.length} grocery txns</span>
+                          <span>•</span>
+                          <span>Total {currency(totalSpending)}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-zinc-600">{recentMeals.length} transactions</div>
-                    </div>
-                    <div className="rounded-lg border p-4">
-                      <div className="text-sm font-semibold text-green-800">🛒 Groceries</div>
-                      <div className="text-2xl font-bold text-green-600">
-                        ${Object.values(spendingByPerson).reduce((sum, p) => sum + p.groceries, 0).toFixed(2)}
-                      </div>
-                      <div className="text-xs text-zinc-600">{recentGroceries.length} transactions</div>
-                    </div>
-                    <div className="rounded-lg border p-4">
-                      <div className="text-sm font-semibold text-blue-800">💳 Total</div>
-                      <div className="text-2xl font-bold text-blue-600">
-                        ${totalSpending.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-zinc-600">{recentMeals.length + recentGroceries.length} transactions</div>
-                    </div>
-                  </div>
 
-                  {/* Horizontal Bar Charts */}
-                  <div className="space-y-6">
-                    {/* Meals Chart */}
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-orange-800">🍽️ Meal Spending by Person</h3>
-                      <div className="space-y-3">
-                        {people.sort((a, b) => spendingByPerson[b].meals - spendingByPerson[a].meals).map(person => {
-                          const amount = spendingByPerson[person].meals;
-                          const maxAmount = Math.max(...Object.values(spendingByPerson).map(p => p.meals));
-                          const percentage = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
-                          const colors = getPersonColor(person);
-                          
-                          return (
-                            <div key={`meals-${person}`} className="flex items-center gap-3">
-                              <div className="w-20 text-sm font-medium">{person}</div>
-                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
-                                <div 
-                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
-                                  style={{ width: `${percentage}%` }}
-                                >
-                                  <span className="text-white text-xs font-medium">
-                                    ${amount.toFixed(2)}
-                                  </span>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-orange-200/70 bg-orange-50/50 p-4 dark:border-orange-500/40 dark:bg-orange-500/10">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">Meals</div>
+                          <div className="mt-2 text-2xl font-bold text-orange-700 dark:text-orange-200">{currency(totalMealsAmount)}</div>
+                          <div className="text-xs text-orange-600/80 dark:text-orange-300/80">{recentMeals.length} transactions</div>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Groceries</div>
+                          <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-200">{currency(totalGroceriesAmount)}</div>
+                          <div className="text-xs text-emerald-600/80 dark:text-emerald-300/80">{recentGroceries.length} transactions</div>
+                        </div>
+                        <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-500/40 dark:bg-blue-500/10">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">Total</div>
+                          <div className="mt-2 text-2xl font-bold text-blue-700 dark:text-blue-200">{currency(totalSpending)}</div>
+                          <div className="text-xs text-blue-600/80 dark:text-blue-300/80">{recentMeals.length + recentGroceries.length} transactions</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="mb-4 flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-semibold">Spend mix by person</div>
+                              <div className="text-xs text-zinc-500 dark:text-zinc-400">Stacked by meals and groceries</div>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>Meals</span>
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>Groceries</span>
+                            </div>
+                          </div>
+                          <div className="h-[260px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={stackedData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} opacity={0.5} />
+                                <XAxis dataKey="person" stroke={axisColor} tick={{ fill: axisColor }} />
+                                <YAxis stroke={axisColor} tick={{ fill: axisColor }} tickFormatter={value => `$${value}`} />
+                                <Tooltip
+                                  formatter={(value: number | string) => (typeof value === 'number' ? currency(value) : value)}
+                                  cursor={{ fill: theme === 'dark' ? '#27272a' : '#f4f4f5' }}
+                                  contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb', color: axisColor }}
+                                />
+                                <Bar dataKey="Meals" stackId="a" fill="#f97316" radius={[6, 6, 0, 0]} />
+                                <Bar dataKey="Groceries" stackId="a" fill="#22c55e" radius={[0, 0, 6, 6]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="mb-4 text-sm font-semibold">Share of total spending</div>
+                          <div className="h-[260px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Tooltip
+                                  formatter={(value: number | string, _name, payload) => [typeof value === 'number' ? currency(value) : value, payload?.name]}
+                                  contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb', color: axisColor }}
+                                />
+                                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} paddingAngle={2}>
+                                  {pieData.map(slice => (
+                                    <Cell key={slice.name} fill={slice.fill} />
+                                  ))}
+                                </Pie>
+                                <Legend
+                                  verticalAlign="bottom"
+                                  height={24}
+                                  formatter={(value: string) => {
+                                    const total = stackedData.find(d => d.person === value)?.Total ?? 0;
+                                    return `${value} • ${shareFormatter(total)}`;
+                                  }}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="mt-4 space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                            {stackedData.map(d => (
+                              <div key={d.person} className="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
+                                  <span className="font-medium text-zinc-700 dark:text-zinc-200">{d.person}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold text-zinc-700 dark:text-zinc-100">{currency(d.Total)} ({shareFormatter(d.Total)})</div>
+                                  <div>{d.mealCount} meals • {d.groceryCount} groceries</div>
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Groceries Chart */}
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-green-800">🛒 Grocery Spending by Person</h3>
-                      <div className="space-y-3">
-                        {people.sort((a, b) => spendingByPerson[b].groceries - spendingByPerson[a].groceries).map(person => {
-                          const amount = spendingByPerson[person].groceries;
-                          const maxAmount = Math.max(...Object.values(spendingByPerson).map(p => p.groceries));
-                          const percentage = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
-                          const colors = getPersonColor(person);
-                          
-                          return (
-                            <div key={`groceries-${person}`} className="flex items-center gap-3">
-                              <div className="w-20 text-sm font-medium">{person}</div>
-                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
-                                <div 
-                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
-                                  style={{ width: `${percentage}%` }}
-                                >
-                                  <span className="text-white text-xs font-medium">
-                                    ${amount.toFixed(2)}
-                                  </span>
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className="text-sm font-semibold">Recent transactions</div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">Most recent 6 entries in range</div>
+                        </div>
+                        <div className="grid gap-2 text-sm">
+                          {activity.length ? (
+                            activity.map(item => (
+                              <div key={item.id} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                                <div>
+                                  <div className="font-medium text-zinc-800 dark:text-zinc-100">{item.label}</div>
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type} • {item.person} • {item.date.toISOString().slice(0,10)}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold text-zinc-800 dark:text-zinc-100">{currency(item.amount)}</div>
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type === 'Meal' ? item.place : 'Grocery trip'}</div>
                                 </div>
                               </div>
+                            ))
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                              No activity found for this range.
                             </div>
-                          );
-                        })}
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Total Chart */}
-                    <div>
-                      <h3 className="text-sm font-semibold mb-3 text-blue-800">💳 Total Spending by Person</h3>
-                      <div className="space-y-3">
-                        {people.sort((a, b) => spendingByPerson[b].total - spendingByPerson[a].total).map(person => {
-                          const amount = spendingByPerson[person].total;
-                          const percentage = totalSpending > 0 ? (amount / totalSpending) * 100 : 0;
-                          const colors = getPersonColor(person);
-                          
-                          return (
-                            <div key={`total-${person}`} className="flex items-center gap-3">
-                              <div className="w-20 text-sm font-medium">{person}</div>
-                              <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
-                                <div 
-                                  className={`${colors.bg} h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
-                                  style={{ width: `${percentage}%` }}
-                                >
-                                  <span className="text-white text-xs font-medium">
-                                    ${amount.toFixed(2)} ({percentage.toFixed(1)}%)
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()
               );
             })()}
           </div>
