@@ -58,40 +58,82 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
-          <motion.div
-            className="relative w-full max-w-lg"
-            onClick={(e) => e.stopPropagation()}
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 30, opacity: 0 }}
-          >
-            {/* Rolling Egg */}
-            <div className="relative h-[320px] w-full overflow-visible">
-              <AnimatePresence mode="popLayout">
-                {phase !== "reveal" && (
-                  <motion.div
-                    key="egg"
-                    className="absolute bottom-0 left-0 right-0 mx-auto"
-                    initial={{ x: "-120%", rotate: -45 }}
-                    animate={{
-                      x: phase === "roll" ? "0%" : "0%",
-                      rotate: phase === "roll" ? 0 : phase === "bounce" ? [0, -6, 5, -3, 2, 0] : 0,
-                      y: phase === "bounce" ? [-2, -18, 0, -10, 0] : 0,
-                      transition: {
-                        duration: phase === "roll" ? 0.9 : 0.9,
-                        ease: phase === "roll" ? "easeOut" : "easeOut",
-                      },
-                    }}
-                  >
+        <motion.div
+          className="w-full max-w-4xl"
+          onClick={(e) => e.stopPropagation()}
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 30, opacity: 0 }}
+        >
+          <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+            <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-100 via-zinc-50 to-white dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900">
+              <img
+                src="/fudi.png"
+                alt="FuDi holding a mystery egg"
+                className="h-full w-full object-cover object-center opacity-95"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent dark:from-black/50" />
+
+              <div className="absolute bottom-10 left-1/2 w-full max-w-[180px] -translate-x-1/2">
+                {phase === "reveal" ? (
+                  <div className="relative h-40">
                     <motion.div
-                      className={`mx-auto h-40 w-32 rounded-full bg-gradient-to-br ${gradient} shadow-2xl`}
-                      animate={phase === "crack" ? { scale: [1, 1.02, 1, 1.02, 1] } : {}}
-                      transition={{ duration: 0.6 }}
+                      className={`absolute left-1/2 top-0 h-24 w-20 -translate-x-1/2 rounded-t-full bg-gradient-to-br ${gradient} shadow-xl`}
+                      initial={{ y: 0, rotate: 0, opacity: 0 }}
+                      animate={{ y: -78, rotate: -16, opacity: 1 }}
                     />
-                    {/* crack line overlay */}
+                    <motion.div
+                      className={`absolute bottom-0 left-1/2 h-24 w-20 -translate-x-1/2 rounded-b-full bg-gradient-to-br ${gradient} shadow-xl`}
+                      initial={{ y: 0, rotate: 0, opacity: 0 }}
+                      animate={{ y: 46, rotate: 16, opacity: 1 }}
+                    />
+                    {[...Array(22)].map((_, i) => (
+                      <motion.span
+                        key={i}
+                        className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-white"
+                        initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
+                        animate={{
+                          opacity: [0, 1, 0],
+                          scale: [0.5, 1.1, 0.8],
+                          x: (Math.random() - 0.5) * 220,
+                          y: -80 - Math.random() * 140,
+                          rotate: Math.random() * 360,
+                        }}
+                        transition={{ duration: 1.2 + Math.random() * 0.5 }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <motion.div
+                    key={phase}
+                    className="relative mx-auto h-40 w-32"
+                    animate={(() => {
+                      if (phase === "roll") {
+                        return {
+                          rotate: [-10, 10, -6, 6, 0],
+                          y: [0, -12, 0],
+                          transition: { duration: 1.6, repeat: Infinity, repeatType: "loop", ease: "easeInOut" },
+                        };
+                      }
+                      if (phase === "bounce") {
+                        return {
+                          y: [0, -22, 0],
+                          transition: { duration: 0.9, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" },
+                        };
+                      }
+                      if (phase === "crack") {
+                        return {
+                          scale: [1, 1.04, 1],
+                          transition: { duration: 0.6, repeat: 2, repeatType: "mirror", ease: "easeInOut" },
+                        };
+                      }
+                      return {};
+                    })()}
+                  >
+                    <div className={`mx-auto h-40 w-32 rounded-full bg-gradient-to-br ${gradient} shadow-2xl`} />
                     {phase !== "roll" && (
                       <motion.div
-                        className="pointer-events-none mx-auto -mt-[148px] h-40 w-32"
+                        className="pointer-events-none absolute inset-0"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: phase === "crack" ? 1 : 0 }}
                       >
@@ -108,72 +150,51 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                     )}
                   </motion.div>
                 )}
-              </AnimatePresence>
+              </div>
 
-              {/* Crack apart to reveal */}
-              {phase === "reveal" && (
-                <>
-                  <motion.div
-                    className={`absolute bottom-20 left-1/2 h-24 w-20 -translate-x-1/2 rounded-t-full bg-gradient-to-br ${gradient} shadow-xl`}
-                    initial={{ y: 0, rotate: 0 }}
-                    animate={{ y: -80, rotate: -12, opacity: 1 }}
-                  />
-                  <motion.div
-                    className={`absolute bottom-0 left-1/2 h-24 w-20 -translate-x-1/2 rounded-b-full bg-gradient-to-br ${gradient} shadow-xl`}
-                    initial={{ y: 0, rotate: 0 }}
-                    animate={{ y: 40, rotate: 12, opacity: 1 }}
-                  />
+              {phase !== "reveal" && (
+                <div className="absolute inset-x-6 bottom-6 rounded-2xl bg-black/50 p-3 text-center text-xs text-white backdrop-blur">
+                  FuDi is giving the egg a little shake…
+                </div>
+              )}
+            </div>
 
-                  {/* Confetti */}
-                  {[...Array(16)].map((_, i) => (
-                    <motion.span
-                      key={i}
-                      className="absolute bottom-28 left-1/2 h-2 w-2 -translate-x-1/2 rounded-sm bg-white/90"
-                      initial={{ x: 0, y: 0, opacity: 0 }}
-                      animate={{
-                        x: (Math.random() - 0.5) * 220,
-                        y: -120 - Math.random() * 80,
-                        opacity: [0, 1, 0],
-                        rotate: Math.random() * 360,
-                      }}
-                      transition={{ duration: 1.2 + Math.random() * 0.4 }}
-                    />
-                  ))}
-
-                  {/* Reveal card */}
+            <div className="flex min-h-[360px] flex-col justify-center">
+              <AnimatePresence mode="wait">
+                {phase === "reveal" ? (
                   <motion.div
-                    className="absolute left-1/2 top-1/2 w-[90%] max-w-md -translate-x-1/2 -translate-y-1/2 card p-5 shadow-2xl dark:shadow-lg"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
+                    key="reveal"
+                    className="card border border-amber-200/70 bg-white/80 p-5 shadow-xl dark:border-amber-400/30 dark:bg-zinc-900/80"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 40 }}
                   >
-                    <div className="mb-2 flex items-center gap-2 text-lg font-semibold">
+                    <div className="mb-3 flex items-center gap-2 text-lg font-semibold text-amber-600 dark:text-amber-200">
                       <EggIcon className="h-5 w-5" /> Your Mystery Pick
                     </div>
                     {pick ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full border px-2 py-0.5 text-xs dark:border-zinc-600 dark:text-zinc-200">{pick.tier}</span>
-                          <span className="rounded-full border px-2 py-0.5 text-xs dark:border-zinc-600 dark:text-zinc-200">{pick.label}</span>
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-amber-300/70 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-300/30 dark:text-amber-200">{pick.tier}</span>
+                          <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">{pick.label}</span>
                         </div>
-                        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                          <div className="text-xs text-zinc-600 dark:text-zinc-300">Suggested</div>
-                          <div className="text-base font-semibold">
+                        <div className="rounded-xl border border-zinc-200 bg-white/70 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/70">
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Suggested spot</div>
+                          <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">
                             {pick.suggestedRestaurant ?? "Chef's Choice"}
                           </div>
-                          <div className="text-sm text-zinc-700 dark:text-zinc-200">{pick.dish ?? "Signature dish"}</div>
-                          <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
-                            <DollarSign className="mr-1 inline h-4 w-4" />
+                          <div className="text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? "Signature dish"}</div>
+                          <div className="mt-2 flex items-center gap-1 text-sm text-zinc-700 dark:text-zinc-200">
+                            <DollarSign className="h-4 w-4" />
                             Est. ${pick.estCost.toFixed(2)}
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <button className="btn-outline" onClick={onClose}>
-                            Close
-                          </button>
+                          <button className="btn-outline" onClick={onClose}>Keep browsing</button>
                           <button
                             className="btn-primary"
                             onClick={() => {
-                              if (pick && onOrder) onOrder(pick);  // NEW: save to history
+                              if (pick && onOrder) onOrder(pick);
                               onClose();
                             }}
                           >
@@ -185,10 +206,22 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                       <div>No pick available.</div>
                     )}
                   </motion.div>
-                </>
-              )}
+                ) : (
+                  <motion.div
+                    key="loading"
+                    className="card border border-zinc-200/80 bg-white/70 p-5 text-center text-sm text-zinc-600 shadow dark:border-zinc-700/70 dark:bg-zinc-900/70 dark:text-zinc-300"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 40 }}
+                  >
+                    <div className="mb-2 text-base font-semibold text-zinc-800 dark:text-zinc-100">Hold tight...</div>
+                    <p>FuDi is peeking inside the egg to find a delicious surprise.</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </motion.div>
+          </div>
+        </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
