@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DollarSign, Egg as EggIcon } from "lucide-react";
 
+import crackedEggImg from '../../image cracked egg.png';
+
 type EggTier = "Bronze" | "Silver" | "Gold" | "Diamond";
 export type Recommendation = {
   key: string;
@@ -32,10 +34,12 @@ const TIER_GRADIENT: Record<EggTier, string> = {
 export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, translate }: Props) {
   // phases: roll -> bounce -> crack -> reveal
   const [phase, setPhase] = useState<"roll" | "bounce" | "crack" | "reveal">("roll");
+  const [crackedBackdrop, setCrackedBackdrop] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setPhase("roll");
+    setCrackedBackdrop(false);
     const t1 = setTimeout(() => setPhase("bounce"), 900);
     const t2 = setTimeout(() => setPhase("crack"), 1700);
     const t3 = setTimeout(() => setPhase("reveal"), 2500);
@@ -43,6 +47,14 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (phase === "crack" || phase === "reveal") {
+      const timer = setTimeout(() => setCrackedBackdrop(true), 600);
+      return () => clearTimeout(timer);
+    }
+    setCrackedBackdrop(false);
+  }, [phase]);
 
   const gradient = useMemo(
     () => (pick ? TIER_GRADIENT[pick.tier] : "from-zinc-300 via-zinc-200 to-zinc-100"),
@@ -68,10 +80,18 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
         >
           <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
             <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-100 via-zinc-50 to-white dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900">
-              <img
-                src="/fudi.png"
-                alt={translate('FuDi holding a mystery egg')}
+              <motion.img
+                key={crackedBackdrop ? 'cracked-bg' : 'intact-bg'}
+                src={crackedBackdrop ? crackedEggImg : '/fudi.png'}
+                alt={
+                  crackedBackdrop
+                    ? translate('FuDi cracked egg backdrop')
+                    : translate('FuDi holding a mystery egg')
+                }
                 className="h-full w-full object-cover object-center opacity-95"
+                initial={{ opacity: 0.6 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.45 }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent dark:from-black/50" />
 
