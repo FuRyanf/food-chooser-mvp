@@ -1228,7 +1228,7 @@ export default function App() {
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <button className="btn-primary" onClick={()=> selectBrowseEntry(e.key)}>Select</button>
                   <button
-                    className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100' : 'hover:bg-zinc-50'}`}
+                    className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:bg-zinc-800' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                     onClick={()=> toggleDisabledKey(normKey)}
                     title={isOff ? 'Enable: allow this dish to be recommended again' : 'Disable: prevent this dish from being recommended until re-enabled'}
                     disabled={coolSavingKey === normKey}
@@ -1362,17 +1362,39 @@ export default function App() {
             <div className="mt-1 text-xs text-zinc-600">Note: The app randomly selects among these top options proportional to their scores. The highlighted one is what the mystery egg will reveal.</div>
             {orderOpen && (
               <div className="mt-3 space-y-2">
-                {rankedMeals.slice(0,5).map((s, idx) => (
-                  <div key={s.meal.id} className={`flex items-center justify-between rounded-lg border p-3 ${appPickIdx===idx ? 'bg-amber-50' : ''}`}>
-                    <div>
-                      <div className="flex items-center gap-2">{appPickIdx===idx && <span className="badge">Chosen</span>}<div className="font-medium">{displayTitle(s.meal.dish)} <span className="text-zinc-500">• {displayTitle(s.meal.cuisine, '—')}</span></div></div>
-                      <div className="text-xs text-zinc-600">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★</div>
-        </div>
-                    <div className="flex gap-2">
-                      <button className="btn-primary" onClick={()=> selectFromTopChoice(s.meal)}>Select</button>
+                {rankedMeals.slice(0,5).map((s, idx) => {
+                  const isChosen = appPickIdx === idx;
+                  return (
+                    <div
+                      key={s.meal.id}
+                      className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                        isChosen
+                          ? 'bg-amber-50 border-amber-300 dark:bg-amber-300/15 dark:border-amber-200/40'
+                          : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {isChosen && (
+                            <span className="badge border-amber-300 bg-amber-200/60 text-amber-900 dark:border-amber-200/60 dark:bg-amber-300/20 dark:text-amber-100">
+                              Chosen
+                            </span>
+                          )}
+                          <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                            {displayTitle(s.meal.dish)}{' '}
+                            <span className="text-zinc-500 dark:text-zinc-300">• {displayTitle(s.meal.cuisine, '—')}</span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                          {displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="btn-primary" onClick={()=> selectFromTopChoice(s.meal)}>Select</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
         </div>
             )}
       </div>
@@ -1535,7 +1557,7 @@ export default function App() {
             {logTab==='meal' ? (
           <table className="table">
             <thead>
-              <tr className="bg-zinc-50">
+              <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
                 <th className="th text-left">Date</th>
                 <th className="th text-left">Cuisine</th>
                 <th className="th text-left">Restaurant</th>
@@ -1548,7 +1570,7 @@ export default function App() {
             </thead>
             <tbody>
                   {(showAllHistory ? meals : meals.slice(0,5)).map(m => (
-                <tr key={m.id} className="hover:bg-zinc-50">
+                <tr key={m.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
                       <td className="td">{m.date.slice(0,10)} {isSeedMeal(m) && <span className="text-amber-700">(seed)</span>}</td>
                       <td className="td">{displayTitle(m.cuisine, '—')}</td>
                       <td className="td">{displayTitle(m.restaurant, '—')}</td>
@@ -1556,9 +1578,9 @@ export default function App() {
                   <td className="td text-right">{currency(m.cost)}</td>
                   <td className="td text-center">
                     <span className={`px-2 py-1 rounded text-xs ${
-                      m.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800' :
-                      m.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800' :
-                      'bg-gray-100 text-gray-600'
+                      m.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-100' :
+                      m.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-100' :
+                      'bg-gray-100 text-gray-600 dark:bg-zinc-700 dark:text-zinc-100'
                     }`}>
                       {m.purchaser_name || 'Unknown'}
                     </span>
@@ -1575,7 +1597,7 @@ export default function App() {
             ) : (
               <table className="table">
                 <thead>
-                  <tr className="bg-zinc-50">
+                  <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
                     <th className="th text-left">Date</th>
                     <th className="th text-left">Store</th>
                     <th className="th text-right">Amount</th>
@@ -1585,15 +1607,15 @@ export default function App() {
                 </thead>
                 <tbody>
                   {(showAllHistory ? groceries : groceries.slice(0,5)).map(g => (
-                    <tr key={g.id} className="hover:bg-zinc-50">
+                    <tr key={g.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
                       <td className="td">{g.date.slice(0,10)}</td>
                       <td className="td">{g.notes ?? '—'}</td>
                       <td className="td text-right">{currency(g.amount)}</td>
                       <td className="td text-center">
                         <span className={`px-2 py-1 rounded text-xs ${
-                          g.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800' :
-                          g.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800' :
-                          'bg-gray-100 text-gray-600'
+                          g.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-100' :
+                          g.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-100' :
+                          'bg-gray-100 text-gray-600 dark:bg-zinc-700 dark:text-zinc-100'
                         }`}>
                           {g.purchaser_name || 'Unknown'}
                         </span>
@@ -1615,9 +1637,9 @@ export default function App() {
       {/* Scoring explain modal */}
       {scoreHelpOpen && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+          <div className="w-full max-w-lg card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
             <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> How we ranked your top choice</div>
-            <pre className="whitespace-pre-wrap rounded bg-zinc-50 p-3 text-sm text-zinc-800">{scoreHelpText}</pre>
+            <pre className="whitespace-pre-wrap rounded bg-zinc-100 p-3 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">{scoreHelpText}</pre>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>Close</button></div>
           </div>
         </div>
@@ -1675,7 +1697,7 @@ export default function App() {
         const contributingGroceries = groceries.filter(g => getLocalMonthKey(g.date.slice(0,10))===selectedMonth);
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
-            <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e=> e.stopPropagation()}>
+            <div className="w-full max-w-3xl card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-lg font-semibold">Spend</div>
                 <div className="flex gap-2">
@@ -1686,7 +1708,7 @@ export default function App() {
                     setSpendWindowStart(`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`);
                     setSpendSelection(null);
                   }}>◀ 6mo</button>
-                  <div className="rounded border px-2 py-1 text-sm" title="Currently viewing a 6-month window">{windowMonths[0]} — {windowMonths[5]}</div>
+                  <div className="rounded border px-2 py-1 text-sm dark:border-zinc-700" title="Currently viewing a 6-month window">{windowMonths[0]} — {windowMonths[5]}</div>
                   <button className="btn-ghost" title="Next 6 months" onClick={()=> {
                     // move window forward by 1 month
                     const [yy, mm] = spendWindowStart.split('-').map(Number);
@@ -1698,48 +1720,48 @@ export default function App() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="h-[220px]">
+                  <div className="h-[220px] rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="month" />
-                          <YAxis />
-                          <Tooltip />
+                          <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#3f3f46' : '#e4e4e7'} opacity={0.7} />
+                          <XAxis dataKey="month" stroke={theme === 'dark' ? '#d4d4d8' : '#3f3f46'} tick={{ fill: theme === 'dark' ? '#d4d4d8' : '#3f3f46' }} />
+                          <YAxis stroke={theme === 'dark' ? '#d4d4d8' : '#3f3f46'} tick={{ fill: theme === 'dark' ? '#d4d4d8' : '#3f3f46' }} />
+                          <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', color: theme === 'dark' ? '#e4e4e7' : '#0f172a', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb' }} labelStyle={{ color: theme === 'dark' ? '#e4e4e7' : '#0f172a' }} />
                           <Bar dataKey="meals" stackId="a" fill="#10b981" />
                           <Bar dataKey="groceries" stackId="a" fill="#3b82f6" fillOpacity={0.7} />
                         </BarChart>
                     </ResponsiveContainer>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs">
-                    <div className="rounded border p-3"><div className="text-zinc-600">Total (6 mo)</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
-                    <div className="rounded border p-3"><div className="text-zinc-600">Groceries</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
-                    <div className="rounded border p-3"><div className="text-zinc-600">Meals</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Total (6 mo)</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Groceries</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Meals</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
                   </div>
                 </div>
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-sm font-semibold">{selectedMonth}</div>
                   </div>
-                  <div className="max-h-[220px] overflow-auto">
+                  <div className="max-h-[220px] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
                     {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
-                      <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                      <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
                         <div>
-                          <div className="font-medium">Grocery</div>
-                          <div className="text-xs text-zinc-600">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
+                          <div className="font-medium text-zinc-900 dark:text-zinc-100">Grocery</div>
+                          <div className="text-xs text-zinc-600 dark:text-zinc-300">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
                         </div>
-                        <div className="font-semibold">{currency(g.amount)}</div>
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(g.amount)}</div>
                       </div>
                     ))}
                     {contributingMeals.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
-                      <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm">
+                      <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
                         <div>
-                          <div className="font-medium">{displayTitle(m.dish)} <span className="text-zinc-500">• {displayTitle(m.cuisine, '—')}</span></div>
-                          <div className="text-xs text-zinc-600">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
+                          <div className="font-medium text-zinc-900 dark:text-zinc-100">{displayTitle(m.dish)} <span className="text-zinc-500 dark:text-zinc-300">• {displayTitle(m.cuisine, '—')}</span></div>
+                          <div className="text-xs text-zinc-600 dark:text-zinc-300">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
                         </div>
-                        <div className="font-semibold">{currency(m.cost)}</div>
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(m.cost)}</div>
                       </div>
                     ))}
-                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="text-sm text-zinc-600">No spend in this month.</div>}
+                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="p-3 text-sm text-zinc-600 dark:text-zinc-300">No spend in this month.</div>}
                   </div>
                 </div>
               </div>
