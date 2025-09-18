@@ -70,7 +70,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
             <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-100 via-zinc-50 to-white dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900">
               <img
                 src="/fudi.png"
-                alt="FuDi holding a mystery egg"
+                alt={translate('FuDi holding a mystery egg')}
                 className="h-full w-full object-cover object-center opacity-95"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent dark:from-black/50" />

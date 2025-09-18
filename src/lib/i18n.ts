@@ -48,6 +48,7 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Hold tight...': { zh: '請稍候…' },
   'FuDi is giving the egg a little shake…': { zh: 'FuDi 正輕輕搖晃著神秘蛋…' },
   'FuDi is peeking inside the egg to find a delicious surprise.': { zh: 'FuDi 正偷看蛋裡的美味驚喜。' },
+  'FuDi holding a mystery egg': { zh: '福娣捧著神秘蛋' },
   'No pick available.': { zh: '目前沒有可用餐點。' },
   'View full list': { zh: '查看完整清單' },
   'Hide list': { zh: '收起清單' },

@@ -1031,9 +1031,9 @@ export default function App() {
         <div>
           <div className="flex items-center gap-2">
             {/* Project icon if present */}
-            <img src="/logo.png" alt="FuDi" className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
+            <img src="/logo.png" alt={language === 'zh' ? '福娣' : 'FuDi'} className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
             <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">{language === 'zh' ? '福娣' : 'FuDi'}</h1>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('Smart, fun meal picker — personalized by mood, budget, and weather.')}</p>
         </div>
