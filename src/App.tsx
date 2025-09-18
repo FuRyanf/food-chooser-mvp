@@ -228,6 +228,7 @@ export default function App() {
 
   const t = useCallback((text: string) => translateText(text, language), [language]);
   const tt = useCallback((text: string, replacements: Record<string, string | number>) => translateTemplate(text, language, replacements), [language]);
+  const appName = language === 'zh' ? '福娣' : 'FuDi';
 
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   const isDarkTheme = theme === 'dark';
@@ -395,11 +396,11 @@ export default function App() {
     const max = Number(budgetDraft.max);
     const days = Number(forbidRepeatDaysDraft);
     const monthlyBudget = monthlyBudgetDraft.trim() ? Number(monthlyBudgetDraft) : null;
-    if (!isFinite(min) || !isFinite(max)) { setPrefsError('Please enter valid numeric min and max.'); return; }
-    if (min < 0 || max < 0) { setPrefsError('Min and Max must be non-negative.'); return; }
-    if (max < min) { setPrefsError('Max must be greater than or equal to Min.'); return; }
-    if (!Number.isInteger(days) || days < 0 || days > 14) { setPrefsError('No repeat within days must be an integer between 0 and 14.'); return; }
-    if (monthlyBudget !== null && (!isFinite(monthlyBudget) || monthlyBudget < 0)) { setPrefsError('Monthly budget must be a non-negative number.'); return; }
+    if (!isFinite(min) || !isFinite(max)) { setPrefsError(t('Please enter valid numeric min and max.')); return; }
+    if (min < 0 || max < 0) { setPrefsError(t('Min and Max must be non-negative.')); return; }
+    if (max < min) { setPrefsError(t('Max must be greater than or equal to Min.')); return; }
+    if (!Number.isInteger(days) || days < 0 || days > 14) { setPrefsError(t('No repeat within days must be an integer between 0 and 14.')); return; }
+    if (monthlyBudget !== null && (!isFinite(monthlyBudget) || monthlyBudget < 0)) { setPrefsError(t('Monthly budget must be a non-negative number.')); return; }
     try {
       setPrefsSaving(true);
       const saved = await FoodChooserAPI.upsertUserPreferences({
@@ -412,10 +413,10 @@ export default function App() {
       setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
       setMonthlyBudgetSaved(saved.monthly_budget ?? null);
-      setPrefsSavedNotice('Preferences saved.');
+      setPrefsSavedNotice(t('Preferences saved.'));
     } catch (e) {
       console.error('Failed to save preferences', e);
-      setPrefsError('Failed to save preferences.');
+      setPrefsError(t('Failed to save preferences.'));
     } finally {
       setPrefsSaving(false);
     }
@@ -1031,9 +1032,9 @@ export default function App() {
         <div>
           <div className="flex items-center gap-2">
             {/* Project icon if present */}
-            <img src="/logo.png" alt={language === 'zh' ? '福娣' : 'FuDi'} className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
+            <img src="/logo.png" alt={appName} className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
             <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">{language === 'zh' ? '福娣' : 'FuDi'}</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">{appName}</h1>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('Smart, fun meal picker — personalized by mood, budget, and weather.')}</p>
         </div>
@@ -1042,8 +1043,8 @@ export default function App() {
             type="button"
             className="btn-ghost flex items-center gap-2"
             onClick={toggleTheme}
-            aria-label={'Switch to ' + (isDarkTheme ? 'light' : 'dark') + ' theme'}
-            title={'Switch to ' + (isDarkTheme ? 'light' : 'dark') + ' theme'}
+            aria-label={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
+            title={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
           >
             {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             <span className="text-xs font-medium">{isDarkTheme ? t('Light') : t('Dark')}</span>
@@ -1990,32 +1991,32 @@ export default function App() {
           </div>
 
           <div className="card p-5">
-            <div className="text-sm font-semibold mb-1">Preferences & budget</div>
+            <div className="text-sm font-semibold mb-1">{t('Preferences & budget')}</div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <div className="label">Min</div>
+                <div className="label">{t('Min')}</div>
                 <input className="input" type="number" value={budgetDraft.min} onChange={e => setBudgetDraft(prev => ({ ...prev, min: e.target.value }))} />
               </div>
               <div>
-                <div className="label">Max</div>
+                <div className="label">{t('Max')}</div>
                 <input className="input" type="number" value={budgetDraft.max} onChange={e => setBudgetDraft(prev => ({ ...prev, max: e.target.value }))} />
               </div>
             </div>
             <div className="mb-3">
-              <div className="label">Monthly budget</div>
+              <div className="label">{t('Monthly budget')}</div>
               <input className="input" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e => setMonthlyBudgetDraft(e.target.value)} />
             </div>
-            <div className="text-xs text-zinc-600 dark:text-zinc-400">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
-            <div className="mt-4 text-sm font-semibold">Egg tiers</div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-400">{tt('Saved: {min} – {max}', { min: currency(budgetSaved.min), max: currency(budgetSaved.max) })}</div>
+            <div className="mt-4 text-sm font-semibold">{t('Egg tiers')}</div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              {eggEligibility.map(t => (
-                <div key={t.name} className="flex items-start justify-between rounded border px-2 py-2 dark:border-zinc-700">
+              {eggEligibility.map(tier => (
+                <div key={tier.name} className="flex items-start justify-between rounded border px-2 py-2 dark:border-zinc-700">
                   <div className="flex flex-col">
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{t.name}</span>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">{t.rangeLabel}</span>
-                    {!t.eligible && t.tip && <span className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{t.tip}</span>}
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{tier.name}</span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400">{tier.rangeLabel}</span>
+                    {!tier.eligible && tier.tip && <span className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{tier.tip}</span>}
                   </div>
-                  <span className={`badge ${t.eligible ? t.badge : 'border-zinc-300 text-zinc-500 dark:border-zinc-600 dark:text-zinc-300'}`}>{t.eligible ? 'Eligible' : 'Not eligible'}</span>
+                  <span className={`badge ${tier.eligible ? tier.badge : 'border-zinc-300 text-zinc-500 dark:border-zinc-600 dark:text-zinc-300'}`}>{tier.eligible ? t('Eligible') : t('Not eligible')}</span>
                 </div>
               ))}
             </div>
@@ -2023,7 +2024,7 @@ export default function App() {
             <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e => setForbidRepeatDaysDraft(e.target.value)}>
               {Array.from({ length: 15 }, (_, i) => i).map(n => (
                 <option key={n} value={String(n)}>
-                  {n === 0 ? '0 (allow repeats)' : n}
+                  {n === 0 ? t('0 (allow repeats)') : n}
                 </option>
               ))}
             </select>
@@ -2032,7 +2033,7 @@ export default function App() {
             {(isPrefsDirty || prefsSaving) && (
               <div className="mt-3 flex justify-end">
                 <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>
-                  {prefsSaving ? 'Saving…' : 'Save Preferences'}
+                  {prefsSaving ? t('Saving…') : t('Save Preferences')}
                 </button>
               </div>
             )}
