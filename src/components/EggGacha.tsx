@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { DollarSign, Egg as EggIcon } from "lucide-react";
 
 import crackedEggImg from '../../image cracked egg.png';
@@ -35,11 +35,15 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
   // phases: roll -> bounce -> crack -> reveal
   const [phase, setPhase] = useState<"roll" | "bounce" | "crack" | "reveal">("roll");
   const [crackedBackdrop, setCrackedBackdrop] = useState(false);
+  const [loadingIndex, setLoadingIndex] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
+  const crackAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setPhase("roll");
     setCrackedBackdrop(false);
+    setLoadingIndex(0);
     const t1 = setTimeout(() => setPhase("bounce"), 900);
     const t2 = setTimeout(() => setPhase("crack"), 1700);
     const t3 = setTimeout(() => setPhase("reveal"), 2500);
@@ -56,10 +60,110 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
     setCrackedBackdrop(false);
   }, [phase]);
 
+  useEffect(() => {
+    crackAudioRef.current = new Audio("/sfx/egg-crack.wav");
+    crackAudioRef.current.volume = 0.35;
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!crackedBackdrop) return;
+    const audio = crackAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }, [crackedBackdrop, open]);
+
+  const loadingMessages = useMemo(
+    () => [
+      translate("FuDi jiggles the egg to wake up flavors…"),
+      translate("Peeking between the cracks for saucy secrets…"),
+      translate("Consulting the pantry spirits for spice guidance…"),
+    ],
+    [translate]
+  );
+
+  useEffect(() => {
+    if (!open || phase === "reveal") return;
+    setLoadingIndex(0);
+    const delay = prefersReducedMotion ? 2000 : 1400;
+    const interval = setInterval(() => {
+      setLoadingIndex((idx) => (idx + 1) % loadingMessages.length);
+    }, delay);
+    return () => clearInterval(interval);
+  }, [open, phase, loadingMessages.length, prefersReducedMotion]);
+
+  const loadingMessage = loadingMessages[loadingIndex] ?? translate('FuDi is giving the egg a little shake…');
+
   const gradient = useMemo(
     () => (pick ? TIER_GRADIENT[pick.tier] : "from-zinc-300 via-zinc-200 to-zinc-100"),
     [pick]
   );
+
+  const tierFlavor = useMemo(() => {
+    if (!pick) return null;
+    switch (pick.tier) {
+      case "Bronze":
+        return translate("Comforting bites with a thrifty twist.");
+      case "Silver":
+        return translate("Balanced picks for everyday cravings.");
+      case "Gold":
+        return translate("Shiny crowd-pleasers with bold flavor.");
+      case "Diamond":
+        return translate("Elevated indulgence worthy of a celebration.");
+      default:
+        return null;
+    }
+  }, [pick, translate]);
+
+  const renderShellSurface = (
+    variant: "full" | "top" | "bottom",
+    sizeClass = ""
+  ) => {
+    const shapeClass =
+      variant === "full"
+        ? "rounded-full"
+        : variant === "top"
+        ? "rounded-t-full"
+        : "rounded-b-full";
+
+    const innerShapeClass = shapeClass;
+
+    const highlightClass =
+      variant === "top"
+        ? "bg-gradient-to-b from-white/65 via-white/20 to-transparent"
+        : variant === "bottom"
+        ? "bg-gradient-to-t from-white/55 via-white/15 to-transparent"
+        : "bg-gradient-to-br from-white/60 via-white/15 to-transparent";
+
+    const shadowOverlayClass =
+      variant === "top"
+        ? "bg-gradient-to-b from-slate-900/25 via-slate-900/10 to-transparent"
+        : variant === "bottom"
+        ? "bg-gradient-to-t from-slate-900/30 via-slate-900/15 to-transparent"
+        : "bg-gradient-to-br from-slate-900/35 via-slate-900/10 to-transparent";
+
+    const shellShadowClass =
+      variant === "full"
+        ? "shadow-[0_22px_38px_rgba(15,23,42,0.32)]"
+        : variant === "top"
+        ? "shadow-[0_16px_26px_rgba(15,23,42,0.28)]"
+        : "shadow-[0_20px_30px_rgba(15,23,42,0.32)]";
+
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-br ${gradient} ${shapeClass} ${shellShadowClass} ${sizeClass}`}
+      >
+        <div className={`pointer-events-none absolute inset-0 ${innerShapeClass} ${highlightClass} opacity-85`} />
+        <div className={`pointer-events-none absolute inset-0 ${innerShapeClass} ${shadowOverlayClass} opacity-70`} />
+        <div className={`pointer-events-none absolute inset-0 ${innerShapeClass} bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.58),transparent_58%)] opacity-90`} />
+        <div className={`pointer-events-none absolute inset-0 ${innerShapeClass} bg-[radial-gradient(circle_at_82%_85%,rgba(15,23,42,0.3),transparent_65%)] opacity-65`} />
+        <div className={`pointer-events-none absolute inset-[18%] ${innerShapeClass} border border-white/35 opacity-60`} />
+        <div className={`pointer-events-none absolute inset-[26%] ${innerShapeClass} bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.45),transparent_65%)] opacity-75 blur-[9px]`} />
+        <div className={`pointer-events-none absolute inset-[30%] ${innerShapeClass} bg-[radial-gradient(circle_at_55%_80%,rgba(15,23,42,0.25),transparent_70%)] opacity-55`} />
+      </div>
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -79,7 +183,11 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
           exit={{ y: 30, opacity: 0 }}
         >
           <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-            <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-100 via-zinc-50 to-white dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900">
+            <div
+              className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br from-zinc-100 via-zinc-50 to-white transition-shadow duration-500 dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900 ${
+                crackedBackdrop ? "border-amber-200/80 shadow-[0_0_30px_rgba(250,204,21,0.35)]" : "border-zinc-200"
+              }`}
+            >
               <motion.img
                 key={crackedBackdrop ? 'cracked-bg' : 'intact-bg'}
                 src={crackedBackdrop ? crackedEggImg : '/fudi.png'}
@@ -93,22 +201,41 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.45 }}
               />
+              <AnimatePresence>
+                {crackedBackdrop && (
+                  <motion.div
+                    key="backdrop-flare"
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background: "radial-gradient(circle at 50% 50%, rgba(253,230,138,0.45), transparent 65%)",
+                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 0.7, 0] }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: prefersReducedMotion ? 0.4 : 0.9, ease: "easeOut" }}
+                  />
+                )}
+              </AnimatePresence>
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent dark:from-black/50" />
 
               <div className="absolute bottom-10 left-1/2 w-full max-w-[180px] -translate-x-1/2">
                 {phase === "reveal" ? (
                   <div className="relative h-40">
                     <motion.div
-                      className={`absolute left-1/2 top-0 h-24 w-20 -translate-x-1/2 rounded-t-full bg-gradient-to-br ${gradient} shadow-xl`}
+                      className="absolute left-1/2 top-0 h-24 w-20 -translate-x-1/2"
                       initial={{ y: 0, rotate: 0, opacity: 0 }}
-                      animate={{ y: -78, rotate: -16, opacity: 1 }}
-                    />
+                      animate={{ y: prefersReducedMotion ? -40 : -78, rotate: prefersReducedMotion ? -8 : -16, opacity: 1 }}
+                    >
+                      {renderShellSurface("top", "h-full w-full")}
+                    </motion.div>
                     <motion.div
-                      className={`absolute bottom-0 left-1/2 h-24 w-20 -translate-x-1/2 rounded-b-full bg-gradient-to-br ${gradient} shadow-xl`}
+                      className="absolute bottom-0 left-1/2 h-24 w-20 -translate-x-1/2"
                       initial={{ y: 0, rotate: 0, opacity: 0 }}
-                      animate={{ y: 46, rotate: 16, opacity: 1 }}
-                    />
-                    {[...Array(22)].map((_, i) => (
+                      animate={{ y: prefersReducedMotion ? 24 : 46, rotate: prefersReducedMotion ? 8 : 16, opacity: 1 }}
+                    >
+                      {renderShellSurface("bottom", "h-full w-full")}
+                    </motion.div>
+                    {!prefersReducedMotion && [...Array(22)].map((_, i) => (
                       <motion.span
                         key={i}
                         className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-white"
@@ -129,6 +256,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                     key={phase}
                     className="relative mx-auto h-40 w-32"
                     animate={(() => {
+                      if (prefersReducedMotion) return {};
                       if (phase === "roll") {
                         return {
                           rotate: [-10, 10, -6, 6, 0],
@@ -151,7 +279,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                       return {};
                     })()}
                   >
-                    <div className={`mx-auto h-40 w-32 rounded-full bg-gradient-to-br ${gradient} shadow-2xl`} />
+                    {renderShellSurface("full", "h-full w-full")}
                     {phase !== "roll" && (
                       <motion.div
                         className="pointer-events-none absolute inset-0"
@@ -175,7 +303,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
 
               {phase !== "reveal" && (
                 <div className="absolute inset-x-6 bottom-6 rounded-2xl bg-black/50 p-3 text-center text-xs text-white backdrop-blur">
-                  {translate('FuDi is giving the egg a little shake…')}
+                  {loadingMessage}
                 </div>
               )}
             </div>
@@ -205,6 +333,9 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                             {pick.suggestedRestaurant ?? translate("Chef's Choice")}
                           </div>
                           <div className="text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? translate('Signature dish')}</div>
+                          {tierFlavor && (
+                            <p className="mt-2 text-xs text-amber-700/80 dark:text-amber-200/80">{tierFlavor}</p>
+                          )}
                           <div className="mt-2 flex items-center gap-1 text-sm text-zinc-700 dark:text-zinc-200">
                             <DollarSign className="h-4 w-4" />
                             {translate('Est.')} ${pick.estCost.toFixed(2)}
@@ -236,7 +367,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                     exit={{ opacity: 0, x: 40 }}
                   >
                     <div className="mb-2 text-base font-semibold text-zinc-800 dark:text-zinc-100">{translate('Hold tight...')}</div>
-                    <p>{translate('FuDi is peeking inside the egg to find a delicious surprise.')}</p>
+                    <p>{loadingMessage}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
