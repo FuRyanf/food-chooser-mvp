@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DollarSign, Egg, Filter, History, Info, Moon, Sparkles, Sun, Trash2 } from 'lucide-react';
+import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
@@ -215,10 +215,13 @@ export default function App() {
   // Tabs: Home (default), Browse, Contributions, and How
   const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'|'how'>('home');
   const [browseSearch, setBrowseSearch] = useState('');
+  const [browseHideDisabled, setBrowseHideDisabled] = useState(false);
+  const [browseSort, setBrowseSort] = useState<'recent' | 'rating' | 'cost'>('recent');
   const [orderOpen, setOrderOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [scoreHelpOpen, setScoreHelpOpen] = useState(false);
   const [scoreHelpText, setScoreHelpText] = useState<string>('');
+
 
   // Edit history modal
   const [editMeal, setEditMeal] = useState<Meal | null>(null);
@@ -614,6 +617,20 @@ export default function App() {
   // Recompute app pick when opening choices, or when inputs change
   useEffect(() => { setAppPickIdx(null); }, [meals, budgetSaved, forbidRepeatDaysSaved, coolOff]);
 
+  const featuredPick = useMemo(() => {
+    if (!rankedMeals.length) return null;
+    if (appPickIdx !== null && appPickIdx < rankedMeals.length) {
+      return rankedMeals[appPickIdx];
+    }
+    return rankedMeals[0];
+  }, [rankedMeals, appPickIdx]);
+  const featuredIsMystery = useMemo(() => {
+    if (appPickIdx === null || !featuredPick) return false;
+    const match = rankedMeals[appPickIdx];
+    return !!match && match.meal.id === featuredPick.meal.id;
+  }, [rankedMeals, featuredPick, appPickIdx]);
+  const featuredBreakdown = featuredPick?.breakdown;
+
   function crackEgg(){
     setIsOverride(false);
     const top = rankedMeals.slice(0,5);
@@ -851,6 +868,79 @@ export default function App() {
     });
   }, [meals, browseSearch]);
 
+  const cuisineOptions = useMemo(() => {
+    const set = new Set<string>();
+    meals.forEach(m => {
+      const c = (m.cuisine || '').trim();
+      if (c) set.add(c);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [meals]);
+
+  const cuisineCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const entry of browseEntries) {
+      const key = normalizeCuisine(entry.latest.cuisine ?? '');
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [browseEntries]);
+
+  const visibleBrowseEntries = useMemo(() => {
+    const includeAll = Object.keys(cuisineFilter).length === 0;
+
+    let items = browseEntries.filter(entry => {
+      if (includeAll) return true;
+      const key = normalizeCuisine(entry.latest.cuisine ?? '');
+      return cuisineFilter[key] !== false;
+    });
+
+    if (browseHideDisabled) {
+      items = items.filter(entry => !coolOff[entry.key]);
+    }
+
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      if (browseSort === 'rating') {
+        const ar = a.latest.rating ?? 0;
+        const br = b.latest.rating ?? 0;
+        if (br !== ar) return br - ar;
+      } else if (browseSort === 'cost') {
+        const ac = a.latest.cost ?? 0;
+        const bc = b.latest.cost ?? 0;
+        if (ac !== bc) return ac - bc;
+      } else {
+        const ad = +new Date(a.latest.date);
+        const bd = +new Date(b.latest.date);
+        if (bd !== ad) return bd - ad;
+      }
+      return (a.latest.dish || '').localeCompare(b.latest.dish || '');
+    });
+
+    return sorted;
+  }, [browseEntries, cuisineFilter, browseHideDisabled, browseSort, coolOff]);
+
+  const allCuisineMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    cuisineOptions.forEach(c => {
+      map[normalizeCuisine(c)] = true;
+    });
+    return map;
+  }, [cuisineOptions]);
+
+  const handleCuisineSelectAll = () => setCuisineFilter(allCuisineMap);
+  const handleCuisineClear = () => {
+    if (!cuisineOptions.length) {
+      setCuisineFilter({});
+      return;
+    }
+    const cleared: Record<string, boolean> = {};
+    cuisineOptions.forEach(c => {
+      cleared[normalizeCuisine(c)] = false;
+    });
+    setCuisineFilter(cleared);
+  };
+
   async function toggleDisabledKey(normKey: string) {
     const [r, d] = normKey.split('|');
     const next = !coolOff[normKey];
@@ -942,7 +1032,6 @@ export default function App() {
           <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
           <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>
           <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
-          <button className="btn-primary" onClick={crackEgg}><Egg className="h-4 w-4"/> Crack Mystery Egg</button>
         </div>
       </header>
 
@@ -1187,181 +1276,263 @@ export default function App() {
         </div>
       ) : activeTab==='browse' ? (
         <div className="card p-5">
-          <div className="text-sm font-semibold mb-2">Browse Meals</div>
-          <div className="mt-1 flex items-center gap-2">
-            <input className="input" placeholder="Search dish, restaurant, cuisine" value={browseSearch} onChange={e=> setBrowseSearch(e.target.value)} />
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-4">
-            {/* Side Filters */}
-            <div className="rounded-xl border p-4 text-sm">
-              <div className="mb-2 font-semibold">Filter by cuisine</div>
-              <div className="mb-1 text-xs text-zinc-600">Show only selected cuisines</div>
-              <div className="max-h-40 overflow-auto pr-1">
-                {Array.from(new Set(meals.map(m => m.cuisine.trim()))).sort().map(c => {
-                  const key = normalizeCuisine(c);
-                  const on = cuisineFilter[key] !== false;
-                  return (
-                    <label key={c} className="mb-1 flex items-center justify-between gap-2">
-                      <span>{c}</span>
-                      <input type="checkbox" checked={on} onChange={e=> setCuisineFilter(prev => ({ ...prev, [key]: e.target.checked }))} />
-                    </label>
-                  );
-                })}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    className="input w-full pl-9"
+                    placeholder="Search dish, restaurant, cuisine"
+                    value={browseSearch}
+                    onChange={e => setBrowseSearch(e.target.value)}
+                  />
+                </div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Showing {visibleBrowseEntries.length} of {browseEntries.length} saved meals
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className={`btn-ghost text-xs ${browseHideDisabled ? 'border border-emerald-400 text-emerald-500 dark:border-emerald-400/50 dark:text-emerald-300' : ''}`}
+                  onClick={() => setBrowseHideDisabled(prev => !prev)}
+                >
+                  {browseHideDisabled ? 'Showing enabled' : 'Hide disabled' }
+                </button>
+                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>Sort:</span>
+                  <div className="inline-flex rounded-full border border-zinc-200 p-1 dark:border-zinc-700">
+                    {[
+                      { key: 'recent', label: 'Newest' },
+                      { key: 'rating', label: 'Rating' },
+                      { key: 'cost', label: 'Cost (low)' }
+                    ].map(option => (
+                      <button
+                        key={option.key}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${browseSort === option.key ? 'bg-zinc-900 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                        onClick={() => setBrowseSort(option.key as typeof browseSort)}
+                        type="button"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-            {/* Items */}
-            <div className="md:col-span-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {browseEntries.filter(e => {
-                const key = normalizeCuisine(e.latest.cuisine ?? '');
-                const on = cuisineFilter[key] !== false; return on;
-              }).map((e) => {
-              const normKey = e.key; // already normalized
-              const isOff = !!coolOff[normKey];
-              return (
-              <div key={e.key} className={`card p-5 hover:shadow transition ${isOff ? 'opacity-60' : ''}`}>
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">{displayTitle(e.latest.dish)}</div>
-                  <span className="badge">{e.latest.rating ?? '—'}★</span>
+
+            <div className="grid gap-6 lg:grid-cols-[250px,1fr]">
+              <aside className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/60 lg:sticky lg:top-6 lg:self-start">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Filter by cuisine</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Toggle to refine the grid</div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button className="btn-ghost text-[11px]" onClick={handleCuisineSelectAll}>All</button>
+                    <button className="btn-ghost text-[11px]" onClick={handleCuisineClear}>Clear</button>
+                  </div>
                 </div>
-                <div className="text-sm text-zinc-600">{displayTitle(e.latest.restaurant)} • {displayTitle(e.latest.cuisine, '—')}</div>
-                <div className="text-sm text-zinc-600">Latest: {currency(e.latest.cost)} • {new Date(e.latest.date).toISOString().slice(0,10)}</div>
-                <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  <button className="btn-primary" onClick={()=> selectBrowseEntry(e.key)}>Select</button>
-                  <button
-                    className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm ${isOff ? 'border-zinc-300 text-zinc-600 bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:bg-zinc-800' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
-                    onClick={()=> toggleDisabledKey(normKey)}
-                    title={isOff ? 'Enable: allow this dish to be recommended again' : 'Disable: prevent this dish from being recommended until re-enabled'}
-                    disabled={coolSavingKey === normKey}
-                  >
-                    {coolSavingKey === normKey ? 'Saving…' : (isOff ? 'Enable' : 'Disable')}
-                  </button>
+                <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                  {cuisineOptions.map(c => {
+                    const key = normalizeCuisine(c);
+                    const on = cuisineFilter[key] !== false;
+                    return (
+                      <label
+                        key={c}
+                        className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition ${
+                          on
+                            ? 'border-transparent bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100'
+                            : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{c}</span>
+                          <span className="text-xs text-zinc-400">{cuisineCounts[key] ?? 0}</span>
+                        </span>
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold ${on ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-zinc-400 text-transparent dark:border-zinc-600'}`}>
+                          ✓
+                        </span>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={on}
+                          onChange={e => setCuisineFilter(prev => ({ ...prev, [key]: e.target.checked }))}
+                        />
+                      </label>
+                    );
+                  })}
+                  {!cuisineOptions.length && (
+                    <div className="rounded-lg border border-dashed border-zinc-300 p-3 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                      Add meals to build cuisine filters.
+                    </div>
+                  )}
                 </div>
+                {cuisineBatchSaving && (
+                  <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Applying bulk update…</div>
+                )}
+              </aside>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleBrowseEntries.map(entry => {
+                  const normKey = entry.key;
+                  const latest = entry.latest;
+                  const isOff = !!coolOff[normKey];
+                  const saving = coolSavingKey === normKey;
+                  return (
+                    <div
+                      key={entry.key}
+                      className={`rounded-2xl border p-5 transition shadow-sm hover:shadow-md ${
+                        isOff
+                          ? 'border-dashed border-zinc-300 bg-zinc-100/70 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60'
+                          : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{displayTitle(latest.dish)}</div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">{displayTitle(latest.restaurant)} • {displayTitle(latest.cuisine, '—')}</div>
+                        </div>
+                        <span className={`flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${isOff ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300' : 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200'}`}>
+                          {latest.rating ?? '—'}★
+                        </span>
+                      </div>
+                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
+                        <div className="flex items-center justify-between">
+                          <span>Last logged</span>
+                          <span>{new Date(latest.date).toISOString().slice(0,10)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span>Cost</span>
+                          <span>{currency(latest.cost)}</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                        {isOff ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Disabled</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200">Active</span>
+                        )}
+                        <div className="flex gap-2">
+                          <button className="btn-primary" onClick={() => selectBrowseEntry(entry.key)}>Select</button>
+                          <button
+                            className={`btn-outline ${isOff ? 'border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-300' : ''}`}
+                            onClick={() => toggleDisabledKey(normKey)}
+                            disabled={saving}
+                          >
+                            {saving ? 'Saving…' : isOff ? 'Enable' : 'Disable'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!visibleBrowseEntries.length && (
+                  <div className="col-span-full rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                    No meals match the current filters. Try adjusting your cuisine toggles or clearing the search.
+                  </div>
+                )}
               </div>
-            );})}
             </div>
           </div>
         </div>
       ) : activeTab==='home' ? (
-        <>
-      {/* Controls */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="card p-5">
-          <div className="text-sm font-semibold mb-1">Meal budget</div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <div className="label">Min</div>
-                  <input className="input" type="number" value={budgetDraft.min} onChange={e=> setBudgetDraft(prev=> ({...prev, min: e.target.value}))} />
-            </div>
-            <div>
-              <div className="label">Max</div>
-                  <input className="input" type="number" value={budgetDraft.max} onChange={e=> setBudgetDraft(prev=> ({...prev, max: e.target.value}))} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <div className="label">Monthly budget</div>
-              <input className="input" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e=> setMonthlyBudgetDraft(e.target.value)} />
-            </div>
-          </div>
-              
-              <div className="mt-1 text-xs text-zinc-600">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
-              <div className="mt-3 text-sm font-semibold">Egg tiers</div>
-              <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
-                {eggEligibility.map(t => (
-                  <div key={t.name} className="flex items-start justify-between rounded border px-2 py-2">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{t.name}</span>
-                      <span className="text-xs text-zinc-600">{t.rangeLabel}</span>
-                      {!t.eligible && t.tip && <span className="mt-1 text-xs text-zinc-600">{t.tip}</span>}
-                    </div>
-                    <span className={`badge ${t.eligible ? t.badge : 'border-zinc-300 text-zinc-500'}`}>{t.eligible ? 'Eligible' : 'Not eligible'}</span>
-                  </div>
-                ))}
+        <React.Fragment>
+      {/* Primary home layout */}
+      <div className="grid gap-4 xl:grid-cols-[1.75fr,1fr]">
+        <div className="space-y-4">
+          <div className="card p-5 space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold">Top choices for you</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                  Note: crack the egg to see the highlighted meal, or peek at the full list if you want to pick manually.
+                </div>
               </div>
-          <div className="mt-3 text-sm">No repeat within (days)</div>
-              <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e=> setForbidRepeatDaysDraft(e.target.value)}>
-                {Array.from({length: 15}, (_,i)=> i).map(n=> <option key={n} value={String(n)}>{n===0 ? '0 (allow repeats)' : n}</option>)}
-          </select>
-              {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
-              {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
-              { (isPrefsDirty || prefsSaving) && (
-                <div className="mt-3 flex justify-end">
-                  <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>{prefsSaving ? 'Saving…' : 'Save Preferences'}</button>
+              <div className="flex items-center gap-2">
+                <button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}>
+                  <Info className="h-4 w-4" /> Explain
+                </button>
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    const next = !orderOpen;
+                    setOrderOpen(next);
+                    if (next) computeAppPick();
+                  }}
+                >
+                  {orderOpen ? 'Hide list' : 'View full list'}
+                </button>
+              </div>
+            </div>
+            <div
+              className={`rounded-xl border p-4 transition-colors ${
+                featuredIsMystery
+                  ? 'bg-amber-50 border-amber-300 dark:bg-amber-300/15 dark:border-amber-200/40'
+                  : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+              }`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                    <Egg className="h-5 w-5" /> Mystery egg is ready
+                  </div>
+                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                    Crack to reveal the meal we’ll spotlight for you. Want to choose yourself? Open the full list.
+                  </div>
+                </div>
+                <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <button className="btn-primary" onClick={crackEgg}>
+                    <Egg className="h-4 w-4" /> Crack Mystery Egg
+                  </button>
+                  <button
+                    className="btn-outline"
+                    onClick={() => {
+                      const topCandidate = rankedMeals[0]?.meal;
+                      if (topCandidate) selectFromTopChoice(topCandidate);
+                    }}
+                    disabled={!rankedMeals.length}
+                  >
+                    Quick add top pick
+                  </button>
+                </div>
+              </div>
+              {featuredPick ? (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                    <div className="rounded border p-3 dark:border-amber-200/40 dark:bg-amber-300/10">
+                      <div className="text-zinc-600 dark:text-zinc-300">Score preview</div>
+                      <div className="text-base font-semibold">{featuredPick.score.toFixed(1)}</div>
+                    </div>
+                    {featuredBreakdown && (
+                      <>
+                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="text-zinc-600 dark:text-zinc-300">Budget fit</div>
+                          <div className="text-base font-semibold">{featuredBreakdown.budgetFit.toFixed(1)}</div>
+                        </div>
+                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="text-zinc-600 dark:text-zinc-300">Weather bonus</div>
+                          <div className="text-base font-semibold">{featuredBreakdown.weatherBonus.toFixed(1)}</div>
+                        </div>
+                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="text-zinc-600 dark:text-zinc-300">Random jitter</div>
+                          <div className="text-base font-semibold">{featuredBreakdown.jitter.toFixed(1)}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    These metrics keep the spotlight pick a surprise while hinting at why it scored well.
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+                  Save a few meals within your budget to generate mystery picks.
                 </div>
               )}
-        </div>
-
-        <div className="card p-5">
-              <div className="text-sm font-semibold mb-1">Today's Context</div>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <div className="label">Condition</div>
-                  <div className="text-lg font-semibold capitalize flex items-center gap-1">{weatherIcon(wx.condition)} <span>{wx.condition}</span></div>
-                  <div className="text-xs text-zinc-600">{locationName || 'Location unavailable'}</div>
             </div>
-                <div><div className="label">Temp</div><div className="text-lg font-semibold">{wx.tempF}°F</div></div>
-            <div>
-              <div className="label">Month-to-date Spend</div>
-                  <button className="text-left text-lg font-semibold underline decoration-dotted" onClick={()=> { setSpendSelection(monthKey(new Date())); setSpendOpen(true); }}>{currency(totalSpendCurrentMonth)}</button>
-            </div>
-          </div>
-          <div className="mt-4 h-[120px]">
-            <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" hide /><YAxis hide /><Tooltip /><Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} /></LineChart>
-            </ResponsiveContainer>
-          </div>
-              {/* Monthly budget summary placed below chart for more space */}
-              <div className="mt-5">
-                <div className="flex items-center justify-between">
-                  <div className="label font-semibold">Monthly budget</div>
-                </div>
-                {monthlyBudgetSaved !== null && monthlyBudgetSaved > 0 && (
-                  (()=>{
-                    const spentMeals = totalSpendMonth();
-                    const spentGroceries = totalGroceryMonth();
-                    const spent = spentMeals + spentGroceries;
-                    const remaining = Math.max(0, monthlyBudgetSaved - spent);
-                    const pct = Math.min(100, Math.round((spent / monthlyBudgetSaved) * 100));
-                    const bar = budgetBarColor(pct);
-                    return (
-                      <div className="mt-3">
-                        <div className="grid gap-3 sm:grid-cols-3 text-xs">
-                          <div className="rounded border p-3"><div className="text-zinc-600">Total</div><div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div></div>
-                          <div className="rounded border p-3"><div className="text-zinc-600">Spent MTD</div><div className="text-base font-semibold">{currency(spent)}</div><div className="mt-1 text-[11px] text-zinc-600">Meals: {currency(spentMeals)} • Groceries: {currency(spentGroceries)}</div></div>
-                          <div className="rounded border p-3"><div className="text-zinc-600">Remaining</div><div className={`text-base font-semibold ${spent>monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700'}`}>{currency(Math.max(0, remaining))}</div></div>
-                        </div>
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-xs text-zinc-600">
-                            <span>Usage</span>
-                            <span>{pct}%</span>
-                          </div>
-                          <div className="mt-1 h-2 w-full rounded bg-zinc-200 relative overflow-hidden">
-                            <div className={`h-2 absolute left-0 top-0 bg-emerald-500`} style={{ width: `${Math.min(100, Math.round((spentMeals / monthlyBudgetSaved) * 100))}%` }} />
-                            <div className={`h-2 absolute left-0 top-0 bg-blue-500`} style={{ width: `${Math.min(100, Math.round(((spentMeals + spentGroceries) / monthlyBudgetSaved) * 100))}%`, opacity: 0.6 }} />
-                          </div>
-                          <div className="mt-1 flex justify-end gap-3 text-[11px] text-zinc-600"><span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-emerald-500"></span> Meals</span><span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-blue-500 opacity-60"></span> Groceries</span></div>
-                        </div>
-                      </div>
-                    );
-                  })()
-                )}
-          </div>
-        </div>
-
-        {/* Quick Filters removed as redundant with Browse */}
-      </div>
-
-          
-
-          {/* Reveal Choices (Order Section) */}
-        <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Top choices for you</div>
-              <div className="flex items-center gap-2"><button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}><Info className="h-4 w-4"/> Explain</button><button className="btn-ghost" onClick={()=> { const next = !orderOpen; setOrderOpen(next); if (next) computeAppPick(); }}>{orderOpen ? 'Hide' : 'Reveal Choices'}</button></div>
-          </div>
-            <div className="mt-1 text-xs text-zinc-600">Note: The app randomly selects among these top options proportional to their scores. The highlighted one is what the mystery egg will reveal.</div>
             {orderOpen && (
-              <div className="mt-3 space-y-2">
+              <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
                 {rankedMeals.slice(0,5).map((s, idx) => {
                   const isChosen = appPickIdx === idx;
                   return (
@@ -1395,15 +1566,15 @@ export default function App() {
                     </div>
                   );
                 })}
-        </div>
+              </div>
             )}
-      </div>
+          </div>
 
           {/* Log Entry (Meal | Grocery Trip) */}
-      <div className="card p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold">Log</div>
-          <div className="flex gap-2">
+          <div className="card p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold">Log</div>
+              <div className="flex gap-2">
             <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>Meal</button>
             <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>Grocery Trip</button>
           </div>
@@ -1628,6 +1799,146 @@ export default function App() {
                 </tbody>
               </table>
             )}
+        </div>
+      </div>
+      </div>
+      </div>
+
+        <div className="space-y-4">
+          <div className="card p-5">
+            <div className="text-sm font-semibold mb-1">Today's Context</div>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <div className="label">Condition</div>
+                <div className="flex items-center gap-1 text-lg font-semibold capitalize">
+                  {weatherIcon(wx.condition)} <span>{wx.condition}</span>
+                </div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">{locationName || 'Location unavailable'}</div>
+              </div>
+              <div>
+                <div className="label">Temp</div>
+                <div className="text-lg font-semibold">{wx.tempF}°F</div>
+              </div>
+              <div>
+                <div className="label">Month-to-date Spend</div>
+                <button
+                  className="text-left text-lg font-semibold underline decoration-dotted"
+                  onClick={() => {
+                    setSpendSelection(monthKey(new Date()));
+                    setSpendOpen(true);
+                  }}
+                >
+                  {currency(totalSpendCurrentMonth)}
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 h-[120px] rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#3f3f46' : '#e4e4e7'} />
+                  <XAxis dataKey="day" hide />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb', color: theme === 'dark' ? '#e4e4e7' : '#0f172a' }}
+                    cursor={{ stroke: theme === 'dark' ? '#52525b' : '#d4d4d8' }}
+                  />
+                  <Line type="monotone" dataKey="spend" strokeWidth={2} dot={false} stroke={theme === 'dark' ? '#38bdf8' : '#2563eb'} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {monthlyBudgetSaved !== null && monthlyBudgetSaved > 0 && (() => {
+              const spentMeals = totalSpendMonth();
+              const spentGroceries = totalGroceryMonth();
+              const spent = spentMeals + spentGroceries;
+              const remaining = Math.max(0, monthlyBudgetSaved - spent);
+              const pct = Math.min(100, Math.round((spent / monthlyBudgetSaved) * 100));
+              return (
+                <div className="mt-5 space-y-3 text-xs">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="text-zinc-600 dark:text-zinc-300">Total</div>
+                      <div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div>
+                    </div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="text-zinc-600 dark:text-zinc-300">Spent MTD</div>
+                      <div className="text-base font-semibold">{currency(spent)}</div>
+                      <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                        Meals: {currency(spentMeals)} • Groceries: {currency(spentGroceries)}
+                      </div>
+                    </div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="text-zinc-600 dark:text-zinc-300">Remaining</div>
+                      <div className={`text-base font-semibold ${spent > monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                        {currency(Math.max(0, remaining))}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+                      <span>Usage</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="mt-1 h-2 w-full rounded bg-zinc-200 dark:bg-zinc-800 relative overflow-hidden">
+                      <div className="absolute left-0 top-0 h-2 bg-emerald-500" style={{ width: `${Math.min(100, Math.round((spentMeals / monthlyBudgetSaved) * 100))}%` }} />
+                      <div className="absolute left-0 top-0 h-2 bg-blue-500" style={{ width: `${Math.min(100, Math.round(((spentMeals + spentGroceries) / monthlyBudgetSaved) * 100))}%`, opacity: 0.6 }} />
+                    </div>
+                    <div className="mt-1 flex justify-end gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-emerald-500"></span> Meals</span>
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-blue-500 opacity-60"></span> Groceries</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="card p-5">
+            <div className="text-sm font-semibold mb-1">Preferences & budget</div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <div className="label">Min</div>
+                <input className="input" type="number" value={budgetDraft.min} onChange={e => setBudgetDraft(prev => ({ ...prev, min: e.target.value }))} />
+              </div>
+              <div>
+                <div className="label">Max</div>
+                <input className="input" type="number" value={budgetDraft.max} onChange={e => setBudgetDraft(prev => ({ ...prev, max: e.target.value }))} />
+              </div>
+            </div>
+            <div className="mb-3">
+              <div className="label">Monthly budget</div>
+              <input className="input" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e => setMonthlyBudgetDraft(e.target.value)} />
+            </div>
+            <div className="text-xs text-zinc-600 dark:text-zinc-400">Saved: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
+            <div className="mt-4 text-sm font-semibold">Egg tiers</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              {eggEligibility.map(t => (
+                <div key={t.name} className="flex items-start justify-between rounded border px-2 py-2 dark:border-zinc-700">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{t.name}</span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400">{t.rangeLabel}</span>
+                    {!t.eligible && t.tip && <span className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{t.tip}</span>}
+                  </div>
+                  <span className={`badge ${t.eligible ? t.badge : 'border-zinc-300 text-zinc-500 dark:border-zinc-600 dark:text-zinc-300'}`}>{t.eligible ? 'Eligible' : 'Not eligible'}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 text-sm">No repeat within (days)</div>
+            <select className="select mt-1" value={forbidRepeatDaysDraft} onChange={e => setForbidRepeatDaysDraft(e.target.value)}>
+              {Array.from({ length: 15 }, (_, i) => i).map(n => (
+                <option key={n} value={String(n)}>
+                  {n === 0 ? '0 (allow repeats)' : n}
+                </option>
+              ))}
+            </select>
+            {prefsError && <div className="mt-2 text-sm text-red-600">{prefsError}</div>}
+            {prefsSavedNotice && <div className="mt-2 text-sm text-green-700">{prefsSavedNotice}</div>}
+            {(isPrefsDirty || prefsSaving) && (
+              <div className="mt-3 flex justify-end">
+                <button className="btn-primary" onClick={savePreferences} disabled={prefsSaving || !isPrefsDirty}>
+                  {prefsSaving ? 'Saving…' : 'Save Preferences'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1771,7 +2082,7 @@ export default function App() {
         );
       })()}
 
-      </>
+      </React.Fragment>
       ) : (
         <div className="card p-5">
           <div className="text-sm font-semibold mb-2">How the ranking works</div>
