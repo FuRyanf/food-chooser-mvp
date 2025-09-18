@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { DollarSign, Egg, Filter, History, Info, Moon, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { DollarSign, Egg, Filter, History, Info, Moon, Sparkles, Sun, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
@@ -203,33 +203,11 @@ export default function App() {
     }
     return initialTheme;
   });
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.classList.toggle('dark', theme === 'dark');
     try { window.localStorage.setItem(THEME_STORAGE_KEY, theme); } catch {/* ignore storage errors */}
   }, [theme]);
-
-  useEffect(() => {
-    if (!settingsOpen) return;
-    function handlePointer(event: MouseEvent) {
-      if (!settingsRef.current) return;
-      if (!settingsRef.current.contains(event.target as Node)) {
-        setSettingsOpen(false);
-      }
-    }
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setSettingsOpen(false);
-    }
-    document.addEventListener('mousedown', handlePointer);
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handlePointer);
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [settingsOpen]);
 
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   const isDarkTheme = theme === 'dark';
@@ -950,31 +928,16 @@ export default function App() {
           <p className="text-sm text-zinc-600 dark:text-zinc-400">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative" ref={settingsRef}>
-            <button
-              type="button"
-              className={`btn-ghost ${settingsOpen ? 'border border-zinc-300 dark:border-zinc-700' : ''}`}
-              onClick={() => setSettingsOpen(prev => !prev)}
-              aria-haspopup="true"
-              aria-expanded={settingsOpen}
-              aria-label="Open settings"
-            >
-              <Settings className="h-4 w-4" />
-              <span className="sr-only">Settings</span>
-            </button>
-            {settingsOpen && (
-              <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Theme</span>
-                  <button type="button" className="btn-outline text-xs" onClick={toggleTheme}>
-                    {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                    {isDarkTheme ? 'Light' : 'Dark'}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Switch between light and dark experiences.</p>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            className="btn-ghost flex items-center gap-2"
+            onClick={toggleTheme}
+            aria-label={'Switch to ' + (isDarkTheme ? 'light' : 'dark') + ' theme'}
+            title={'Switch to ' + (isDarkTheme ? 'light' : 'dark') + ' theme'}
+          >
+            {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <span className="text-xs font-medium">{isDarkTheme ? 'Light' : 'Dark'}</span>
+          </button>
           <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('home')}>Home</button>
           <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
           <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>

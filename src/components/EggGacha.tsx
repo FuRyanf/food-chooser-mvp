@@ -142,7 +142,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
 
                   {/* Reveal card */}
                   <motion.div
-                    className="absolute left-1/2 top-1/2 w-[90%] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-white p-5 shadow-2xl"
+                    className="absolute left-1/2 top-1/2 w-[90%] max-w-md -translate-x-1/2 -translate-y-1/2 card p-5 shadow-2xl dark:shadow-lg"
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                   >
@@ -152,29 +152,26 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                     {pick ? (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full border px-2 py-0.5 text-xs">{pick.tier}</span>
-                          <span className="rounded-full border px-2 py-0.5 text-xs">{pick.label}</span>
+                          <span className="rounded-full border px-2 py-0.5 text-xs dark:border-zinc-600 dark:text-zinc-200">{pick.tier}</span>
+                          <span className="rounded-full border px-2 py-0.5 text-xs dark:border-zinc-600 dark:text-zinc-200">{pick.label}</span>
                         </div>
-                        <div className="rounded-xl border p-3">
-                          <div className="text-xs text-zinc-600">Suggested</div>
+                        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="text-xs text-zinc-600 dark:text-zinc-300">Suggested</div>
                           <div className="text-base font-semibold">
                             {pick.suggestedRestaurant ?? "Chef's Choice"}
                           </div>
-                          <div className="text-sm">{pick.dish ?? "Signature dish"}</div>
-                          <div className="mt-2 text-sm">
+                          <div className="text-sm text-zinc-700 dark:text-zinc-200">{pick.dish ?? "Signature dish"}</div>
+                          <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-200">
                             <DollarSign className="mr-1 inline h-4 w-4" />
                             Est. ${pick.estCost.toFixed(2)}
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <button
-                            className="inline-flex items-center rounded-xl border px-3 py-2 text-sm hover:bg-zinc-50"
-                            onClick={onClose}
-                          >
+                          <button className="btn-outline" onClick={onClose}>
                             Close
                           </button>
                           <button
-                            className="inline-flex items-center rounded-xl bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800"
+                            className="btn-primary"
                             onClick={() => {
                               if (pick && onOrder) onOrder(pick);  // NEW: save to history
                               onClose();

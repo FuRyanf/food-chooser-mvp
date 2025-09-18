@@ -9,7 +9,7 @@ body { @apply min-h-screen bg-zinc-100 text-zinc-900 transition-colors duration-
 
 .card { @apply rounded-2xl bg-white shadow border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800; }
 .btn { @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition; }
-.btn-primary { @apply btn bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200; }
+.btn-primary { @apply btn bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700; }
 .btn-ghost { @apply btn hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800; }
 .btn-outline { @apply btn border border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800; }
 .badge { @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs dark:border-zinc-700; }
