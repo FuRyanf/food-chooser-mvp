@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2, Languages } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
 import { createPortal } from 'react-dom';
+import { Language, translateTemplate, translateText } from './lib/i18n';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type Weather = { condition: 'hot'|'cold'|'mild'|'rain'; tempF: number };
@@ -25,6 +26,7 @@ type Overrides = Record<string, number>;
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 
 const THEME_STORAGE_KEY = 'fudi.theme';
+const LANGUAGE_STORAGE_KEY = 'fudi.language';
 
 function resolveInitialTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';
@@ -32,6 +34,14 @@ function resolveInitialTheme(): 'light' | 'dark' {
   if (stored === 'light' || stored === 'dark') return stored;
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
   return prefersDark ? 'dark' : 'light';
+}
+
+function resolveInitialLanguage(): Language {
+  if (typeof window === 'undefined') return 'en';
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (stored === 'en' || stored === 'zh') return stored;
+  const locale = window.navigator.language.toLowerCase();
+  return locale.startsWith('zh') ? 'zh' : 'en';
 }
 
 // Los Angeles timezone helpers
@@ -196,6 +206,7 @@ export default function App() {
   const [overrides, setOverrides] = useState<Overrides>({});
   const [isOverride, setIsOverride] = useState(false);
 
+  const [language, setLanguage] = useState<Language>(() => resolveInitialLanguage());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const initialTheme = resolveInitialTheme();
     if (typeof document !== 'undefined') {
@@ -208,6 +219,15 @@ export default function App() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     try { window.localStorage.setItem(THEME_STORAGE_KEY, theme); } catch {/* ignore storage errors */}
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = language === 'zh' ? 'zh-Hant' : 'en';
+    try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language); } catch {/* ignore storage errors */}
+  }, [language]);
+
+  const t = useCallback((text: string) => translateText(text, language), [language]);
+  const tt = useCallback((text: string, replacements: Record<string, string | number>) => translateTemplate(text, language, replacements), [language]);
 
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   const isDarkTheme = theme === 'dark';
@@ -526,7 +546,7 @@ export default function App() {
       seed_only: false,
       purchaser_name: 'Unknown'
     });
-    showToast('Logged to Meal History');
+    showToast(t('Logged to Meal History'));
   }
   async function logFromRec(r: Recommendation){
     await addMeal({
@@ -540,7 +560,7 @@ export default function App() {
       seed_only: false,
       purchaser_name: 'Unknown'
     });
-    showToast('Logged to Meal History');
+    showToast(t('Logged to Meal History'));
   }
 
   // Select from Top choices: behave like Browse.Select (no egg; add to history directly)
@@ -556,11 +576,11 @@ export default function App() {
       seed_only: false,
       purchaser_name: 'Unknown'
     });
-    showToast('Selected! Added to your Meal History.');
+    showToast(t('Selected! Added to your Meal History.'));
   }
   async function selectBrowseEntry(key: string){
     await addBrowseEntryToHistory(key);
-    showToast('Selected! Added to your Meal History.');
+    showToast(t('Selected! Added to your Meal History.'));
   }
 
   // Weighted random selection among top options
@@ -715,12 +735,12 @@ export default function App() {
     const top = rankedMeals[0];
     const b = top.breakdown;
     const lines = [
-      `Rating weight: ${b.ratingWeight.toFixed(1)}`,
-      `Recency penalty: ${b.recencyPenalty.toFixed(1)}`,
-      `Budget fit: ${b.budgetFit.toFixed(1)}`,
-      `Weather bonus: ${b.weatherBonus.toFixed(1)}`,
-      `Random jitter: ${b.jitter.toFixed(1)}`,
-      `Total score: ${b.total.toFixed(1)}`
+      `${t('Rating weight')}: ${b.ratingWeight.toFixed(1)}`,
+      `${t('Recency penalty')}: ${b.recencyPenalty.toFixed(1)}`,
+      `${t('Budget fit')}: ${b.budgetFit.toFixed(1)}`,
+      `${t('Weather bonus')}: ${b.weatherBonus.toFixed(1)}`,
+      `${t('Jitter')}: ${b.jitter.toFixed(1)}`,
+      `${t('Total score')}: ${b.total.toFixed(1)}`
     ];
     setScoreHelpText(lines.join('\n'));
     setScoreHelpOpen(true);
@@ -989,7 +1009,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-        <div className="flex items-center justify-center h-64"><div className="text-lg">Loading your food data...</div></div>
+        <div className="flex items-center justify-center h-64"><div className="text-lg">{t('Loading your food data...')}</div></div>
       </div>
     );
   }
@@ -998,8 +1018,8 @@ export default function App() {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
         <div className="card p-8 text-center">
-          <div className="text-red-600 mb-4">Error: {error}</div>
-          <button className="btn-primary" onClick={() => { setError(null); loadData(); }}>Retry</button>
+          <div className="text-red-600 mb-4">{t('Error')}: {error}</div>
+          <button className="btn-primary" onClick={() => { setError(null); loadData(); }}>{t('Retry')}</button>
         </div>
       </div>
     );
@@ -1015,7 +1035,7 @@ export default function App() {
             <Sparkles className="h-6 w-6" />
             <h1 className="text-2xl font-bold md:text-3xl">FuDi</h1>
           </div>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Smart, fun meal picker — personalized by mood, budget, and weather.</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('Smart, fun meal picker — personalized by mood, budget, and weather.')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -1026,12 +1046,22 @@ export default function App() {
             title={'Switch to ' + (isDarkTheme ? 'light' : 'dark') + ' theme'}
           >
             {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            <span className="text-xs font-medium">{isDarkTheme ? 'Light' : 'Dark'}</span>
+            <span className="text-xs font-medium">{isDarkTheme ? t('Light') : t('Dark')}</span>
           </button>
-          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('home')}>Home</button>
-          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('browse')}>Browse</button>
-          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>Contributions</button>
-          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('how')}>How It Works</button>
+          <button
+            type="button"
+            className="btn-ghost flex items-center gap-2"
+            onClick={() => setLanguage(prev => (prev === 'en' ? 'zh' : 'en'))}
+            aria-label={t('Switch Language')}
+            title={t('Switch Language')}
+          >
+            <Languages className="h-4 w-4" />
+            <span className="text-xs font-medium">{language === 'en' ? '中文' : 'EN'}</span>
+          </button>
+          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('home')}>{t('Home')}</button>
+          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={() => setActiveTab('browse')}>{t('Browse')}</button>
+          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>{t('Contributions')}</button>
+          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('how')}>{t('How It Works')}</button>
         </div>
       </header>
 
@@ -1041,27 +1071,27 @@ export default function App() {
           <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="text-sm font-semibold">💰 Spending Contributions</div>
-                <div className="text-xs text-zinc-600 mt-1">See who's been buying meals and groceries</div>
+                <div className="text-sm font-semibold">💰 {t('Spending Contributions')}</div>
+                <div className="text-xs text-zinc-600 mt-1 dark:text-zinc-400">{t("See who's been buying meals and groceries")}</div>
               </div>
               <div className="flex items-center gap-2">
                 <button 
                   className={`btn-ghost text-xs ${contributionsDateRange === 'mtd' ? 'border border-zinc-300' : ''}`}
                   onClick={() => setContributionsDateRange('mtd')}
                 >
-                  Month to Date
+                  {t('Month to Date')}
                 </button>
                 <button 
                   className={`btn-ghost text-xs ${contributionsDateRange === 'all' ? 'border border-zinc-300' : ''}`}
                   onClick={() => setContributionsDateRange('all')}
                 >
-                  All Time
+                  {t('All Time')}
                 </button>
                 <button 
                   className={`btn-ghost text-xs ${contributionsDateRange === 'custom' ? 'border border-zinc-300' : ''}`}
                   onClick={() => setContributionsDateRange('custom')}
                 >
-                  Custom
+                  {t('Custom')}
                 </button>
                 {contributionsDateRange === 'custom' && (
                   <div className="flex items-center gap-1">
@@ -1086,19 +1116,19 @@ export default function App() {
               let dateLabel: string;
               
               if (contributionsDateRange === 'mtd') {
-                // Month to date - start of current month
                 const now = new Date();
                 cutoffDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                dateLabel = `Month to Date (${cutoffDate.toLocaleDateString()})`;
+                const labelDate = cutoffDate.toLocaleDateString(language === 'zh' ? 'zh-TW' : undefined);
+                dateLabel = language === 'zh' ? `本月至今 (${labelDate})` : `Month to Date (${labelDate})`;
               } else if (contributionsDateRange === 'all') {
-                // All time - use a very old date to include everything
                 cutoffDate = new Date(2020, 0, 1);
-                dateLabel = 'All Time';
+                dateLabel = language === 'zh' ? '所有時間' : 'All Time';
               } else {
-                // Custom days
                 const days = Math.max(1, parseInt(customDays) || 30);
                 cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-                dateLabel = `Past ${days} day${days === 1 ? '' : 's'}`;
+                dateLabel = language === 'zh'
+                  ? `過去 ${days} 天`
+                  : `Past ${days} day${days === 1 ? '' : 's'}`;
               }
 
               const recentMeals = meals.filter(m => new Date(m.date) >= cutoffDate && !isSeedMeal(m));
@@ -1141,8 +1171,8 @@ export default function App() {
               if (people.length === 0) {
                 return (
                   <div className="text-center py-8 text-zinc-600">
-                    <div className="text-lg mb-2">No spending data found</div>
-                    <div className="text-sm">Try selecting a longer time period or add some meals/groceries with purchaser names</div>
+                    <div className="text-lg mb-2">{t('No spending data found')}</div>
+                    <div className="text-sm">{t('Try selecting a longer time period or add some meals/groceries with purchaser names')}</div>
                   </div>
                 );
               }
@@ -1220,19 +1250,19 @@ export default function App() {
 
                       <div className="grid gap-4 sm:grid-cols-3">
                         <div className="rounded-2xl border border-orange-200/70 bg-orange-50/50 p-4 dark:border-orange-500/40 dark:bg-orange-500/10">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">Meals</div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">{t('Meals')}</div>
                           <div className="mt-2 text-2xl font-bold text-orange-700 dark:text-orange-200">{currency(totalMealsAmount)}</div>
-                          <div className="text-xs text-orange-600/80 dark:text-orange-300/80">{recentMeals.length} transactions</div>
+                          <div className="text-xs text-orange-600/80 dark:text-orange-300/80">{tt('{count} transactions', { count: recentMeals.length })}</div>
                         </div>
                         <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-500/40 dark:bg-emerald-500/10">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Groceries</div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{t('Groceries')}</div>
                           <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-200">{currency(totalGroceriesAmount)}</div>
-                          <div className="text-xs text-emerald-600/80 dark:text-emerald-300/80">{recentGroceries.length} transactions</div>
+                          <div className="text-xs text-emerald-600/80 dark:text-emerald-300/80">{tt('{count} transactions', { count: recentGroceries.length })}</div>
                         </div>
                         <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-500/40 dark:bg-blue-500/10">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">Total</div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">{t('Total')}</div>
                           <div className="mt-2 text-2xl font-bold text-blue-700 dark:text-blue-200">{currency(totalSpending)}</div>
-                          <div className="text-xs text-blue-600/80 dark:text-blue-300/80">{recentMeals.length + recentGroceries.length} transactions</div>
+                          <div className="text-xs text-blue-600/80 dark:text-blue-300/80">{tt('{count} transactions', { count: recentMeals.length + recentGroceries.length })}</div>
                         </div>
                       </div>
 
@@ -1240,12 +1270,12 @@ export default function App() {
                         <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
                           <div className="mb-4 flex items-center justify-between">
                             <div>
-                              <div className="text-sm font-semibold">Spend mix by person</div>
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">Stacked by meals and groceries</div>
+                              <div className="text-sm font-semibold">{t('Spend mix by person')}</div>
+                              <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Stacked by meals and groceries')}</div>
                             </div>
                             <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>Meals</span>
-                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>Groceries</span>
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>{t('Meals')}</span>
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>{t('Groceries')}</span>
                             </div>
                           </div>
                           <div className="h-[260px]">
@@ -1267,7 +1297,7 @@ export default function App() {
                         </div>
 
                         <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                          <div className="mb-4 text-sm font-semibold">Share of total spending</div>
+                          <div className="mb-4 text-sm font-semibold">{t('Share of total spending')}</div>
                           <div className="h-[260px]">
                             <ResponsiveContainer width="100%" height="100%">
                               <PieChart>
@@ -1300,7 +1330,7 @@ export default function App() {
                                 </div>
                                 <div className="text-right">
                                   <div className="font-semibold text-zinc-700 dark:text-zinc-100">{currency(d.Total)} ({shareFormatter(d.Total)})</div>
-                                  <div>{d.mealCount} meals • {d.groceryCount} groceries</div>
+                                  <div>{t('Meals')}: {d.mealCount} • {t('Groceries')}: {d.groceryCount}</div>
                                 </div>
                               </div>
                             ))}
@@ -1310,8 +1340,8 @@ export default function App() {
 
                       <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
                         <div className="mb-4 flex items-center justify-between">
-                          <div className="text-sm font-semibold">Recent transactions</div>
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">Most recent 6 entries in range</div>
+                          <div className="text-sm font-semibold">{t('Recent transactions')}</div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Most recent 6 entries in range')}</div>
                         </div>
                         <div className="grid gap-2 text-sm">
                           {activity.length ? (
@@ -1319,17 +1349,17 @@ export default function App() {
                               <div key={item.id} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
                                 <div>
                                   <div className="font-medium text-zinc-800 dark:text-zinc-100">{item.label}</div>
-                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type} • {item.person} • {item.date.toISOString().slice(0,10)}</div>
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{t(item.type === 'Meal' ? 'Meal' : 'Groceries')} • {item.person} • {item.date.toISOString().slice(0,10)}</div>
                                 </div>
                                 <div className="text-right">
                                   <div className="font-semibold text-zinc-800 dark:text-zinc-100">{currency(item.amount)}</div>
-                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type === 'Meal' ? item.place : 'Grocery trip'}</div>
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type === 'Meal' ? item.place : t('Grocery Trip')}</div>
                                 </div>
                               </div>
                             ))
                           ) : (
                             <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                              No activity found for this range.
+                              {t('No activity found for this range.')}
                             </div>
                           )}
                         </div>
@@ -1350,13 +1380,13 @@ export default function App() {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                   <input
                     className="input w-full pl-9"
-                    placeholder="Search dish, restaurant, cuisine"
+                    placeholder={t('Search dish, restaurant, cuisine')}
                     value={browseSearch}
                     onChange={e => setBrowseSearch(e.target.value)}
                   />
                 </div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Showing {visibleBrowseEntries.length} of {browseEntries.length} saved meals
+                  {tt('Showing {current} of {total} saved meals', { current: visibleBrowseEntries.length, total: browseEntries.length })}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1367,12 +1397,12 @@ export default function App() {
                   {browseHideDisabled ? 'Showing enabled' : 'Hide disabled' }
                 </button>
                 <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  <span>Sort:</span>
+                  <span>{t('Sort')}:</span>
                   <div className="inline-flex rounded-full border border-zinc-200 p-1 dark:border-zinc-700">
                     {[
-                      { key: 'recent', label: 'Newest' },
-                      { key: 'rating', label: 'Rating' },
-                      { key: 'cost', label: 'Cost (low)' }
+                      { key: 'recent', label: t('Newest') },
+                      { key: 'rating', label: t('Rating') },
+                      { key: 'cost', label: t('Cost (low)') }
                     ].map(option => (
                       <button
                         key={option.key}
@@ -1392,12 +1422,12 @@ export default function App() {
               <aside className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/60 lg:sticky lg:top-6 lg:self-start">
                 <div className="mb-2 flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold">Filter by cuisine</div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Toggle to refine the grid</div>
+                    <div className="text-sm font-semibold">{t('Filter by cuisine')}</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Toggle to refine the grid')}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button className="btn-ghost text-[11px]" onClick={handleCuisineSelectAll}>All</button>
-                    <button className="btn-ghost text-[11px]" onClick={handleCuisineClear}>Clear</button>
+                    <button className="btn-ghost text-[11px]" onClick={handleCuisineSelectAll}>{t('All')}</button>
+                    <button className="btn-ghost text-[11px]" onClick={handleCuisineClear}>{t('Clear')}</button>
                   </div>
                 </div>
                 <div className="max-h-72 space-y-2 overflow-auto pr-1">
@@ -1431,12 +1461,12 @@ export default function App() {
                   })}
                   {!cuisineOptions.length && (
                     <div className="rounded-lg border border-dashed border-zinc-300 p-3 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                      Add meals to build cuisine filters.
+                      {t('Add meals to build cuisine filters.')}
                     </div>
                   )}
                 </div>
                 {cuisineBatchSaving && (
-                  <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Applying bulk update…</div>
+                  <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('Applying bulk update…')}</div>
                 )}
               </aside>
 
@@ -1466,28 +1496,28 @@ export default function App() {
                       </div>
                       <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
                         <div className="flex items-center justify-between">
-                          <span>Last logged</span>
+                          <span>{t('Last logged')}</span>
                           <span>{new Date(latest.date).toISOString().slice(0,10)}</span>
                         </div>
                         <div className="mt-1 flex items-center justify-between">
-                          <span>Cost</span>
+                          <span>{t('Cost')}</span>
                           <span>{currency(latest.cost)}</span>
                         </div>
                       </div>
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                         {isOff ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Disabled</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{t('Disabled')}</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200">Active</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200">{t('Active')}</span>
                         )}
                         <div className="flex gap-2">
-                          <button className="btn-primary" onClick={() => selectBrowseEntry(entry.key)}>Select</button>
+                          <button className="btn-primary" onClick={() => selectBrowseEntry(entry.key)}>{t('Select')}</button>
                           <button
                             className={`btn-outline ${isOff ? 'border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-300' : ''}`}
                             onClick={() => toggleDisabledKey(normKey)}
                             disabled={saving}
                           >
-                            {saving ? 'Saving…' : isOff ? 'Enable' : 'Disable'}
+                            {saving ? t('Saving…') : isOff ? t('Enable') : t('Disable')}
                           </button>
                         </div>
                       </div>
@@ -1496,7 +1526,7 @@ export default function App() {
                 })}
                 {!visibleBrowseEntries.length && (
                   <div className="col-span-full rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                    No meals match the current filters. Try adjusting your cuisine toggles or clearing the search.
+                    {t('No meals match the current filters. Try adjusting your cuisine toggles or clearing the search.')}
                   </div>
                 )}
               </div>
@@ -1511,14 +1541,14 @@ export default function App() {
           <div className="card p-5 space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-sm font-semibold">Top choices for you</div>
+                <div className="text-sm font-semibold">{t('Top choices for you')}</div>
                 <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                  Note: crack the egg to see the highlighted meal, or peek at the full list if you want to pick manually.
+                  {t('Note: crack the egg to see the highlighted meal, or peek at the full list if you want to pick manually.')}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button className="btn-ghost inline-flex items-center gap-1" onClick={openScoreHelp}>
-                  <Info className="h-4 w-4" /> Explain
+                  <Info className="h-4 w-4" /> {t('Explain')}
                 </button>
                 <button
                   className="btn-ghost"
@@ -1528,7 +1558,7 @@ export default function App() {
                     if (next) computeAppPick();
                   }}
                 >
-                  {orderOpen ? 'Hide list' : 'View full list'}
+                  {orderOpen ? t('Hide list') : t('View full list')}
                 </button>
               </div>
             </div>
@@ -1542,15 +1572,15 @@ export default function App() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                    <Egg className="h-5 w-5" /> Mystery egg is ready
+                    <Egg className="h-5 w-5" /> {t('Mystery egg is ready')}
                   </div>
                   <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    Crack to reveal the meal we’ll spotlight for you. Want to choose yourself? Open the full list.
+                    {t('Crack to reveal the meal we’ll spotlight for you. Want to choose yourself? Open the full list.')}
                   </div>
                 </div>
                 <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <button className="btn-primary" onClick={crackEgg}>
-                    <Egg className="h-4 w-4" /> Crack Mystery Egg
+                    <Egg className="h-4 w-4" /> {t('Crack Mystery Egg')}
                   </button>
                   <button
                     className="btn-outline"
@@ -1560,7 +1590,7 @@ export default function App() {
                     }}
                     disabled={!rankedMeals.length}
                   >
-                    Quick add top pick
+                    {t('Quick add top pick')}
                   </button>
                 </div>
               </div>
@@ -1640,76 +1670,76 @@ export default function App() {
           {/* Log Entry (Meal | Grocery Trip) */}
           <div className="card p-5">
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold">Log</div>
+              <div className="text-sm font-semibold">{t('Log')}</div>
               <div className="flex gap-2">
-            <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>Meal</button>
-            <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>Grocery Trip</button>
+            <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>{t('Meal')}</button>
+            <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>{t('Grocery Trip')}</button>
           </div>
         </div>
         {logTab==='meal' ? (
           <>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <div>
-            <div className="label">Date</div>
+            <div className="label">{t('Date')}</div>
             <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
           </div>
           <div>
-            <div className="label">Cost (USD)</div>
+            <div className="label">{t('Cost (USD)')}</div>
             <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
           </div>
           <div>
-            <div className="label">Cuisine</div>
+            <div className="label">{t('Cuisine')}</div>
             <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
             <datalist id="cuisine-list">
               {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
             </datalist>
           </div>
           <div>
-            <div className="label">Restaurant</div>
+            <div className="label">{t('Restaurant')}</div>
                 <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
                 <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
           </div>
           <div>
-            <div className="label">Dish</div>
+            <div className="label">{t('Dish')}</div>
                 <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
                 <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
           </div>
           <div>
-            <div className="label">Rating (1-5)</div>
+            <div className="label">{t('Rating')} (1-5)</div>
             <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
           </div>
           <div>
-            <div className="label">Who Paid?</div>
+            <div className="label">{t('Who Paid?')}</div>
             <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
           </div>
           <div className="md:col-span-2 lg:col-span-3">
-            <div className="label">Notes</div>
+            <div className="label">{t('Notes')}</div>
             <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
           </div>
               <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
-                Mark as seed (won't count toward spend)
+                {t("Mark as seed (won't count toward spend)")}
               </label>
         </div>
-            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>Save Meal</button></div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>{t('Save Meal')}</button></div>
           </>
         ) : (
           <>
             <div className="grid gap-3 md:grid-cols-4">
               <div>
-                <div className="label">Date</div>
+                <div className="label">{t('Date')}</div>
                 <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
         </div>
               <div>
-                <div className="label">Amount (USD)</div>
+                <div className="label">{t('Amount (USD)')}</div>
                 <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
       </div>
               <div>
-                <div className="label">Who Paid?</div>
+                <div className="label">{t('Who Paid?')}</div>
                 <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
               </div>
               <div className="relative">
-                <div className="label">Store</div>
+                <div className="label">{t('Store')}</div>
                 <input 
                   className="input" 
                   value={gStore} 
@@ -1771,7 +1801,7 @@ export default function App() {
                   </div>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
               const amt = Number(gAmount) || 0;
-              if (amt <= 0) { showToast('Enter a valid amount'); return; }
+              if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
               await FoodChooserAPI.addGrocery({ 
                 date: toLocalISOString(gDate), 
                 amount: amt, 
@@ -1781,29 +1811,29 @@ export default function App() {
               const latest = await FoodChooserAPI.getGroceries();
               setGroceries(latest);
               setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
-              showToast('Grocery trip saved');
-            }}>Save Trip</button></div>
+              showToast(t('Grocery trip saved'));
+            }}>{t('Save Trip')}</button></div>
           </>
         )}
         {/* Shared History section */}
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold">History</div>
-            <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? 'View Last 5' : 'View All'}</button>
+            <div className="text-sm font-semibold">{t('History')}</div>
+            <button className="btn-ghost" onClick={()=> setShowAllHistory(v=>!v)}>{showAllHistory ? t('View Last 5') : t('View All')}</button>
       </div>
         <div className="overflow-x-auto">
-            {logTab==='meal' ? (
+              {logTab==='meal' ? (
           <table className="table">
             <thead>
               <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
-                <th className="th text-left">Date</th>
-                <th className="th text-left">Cuisine</th>
-                <th className="th text-left">Restaurant</th>
-                <th className="th text-left">Dish</th>
-                <th className="th text-right">Cost</th>
-                <th className="th text-center">Who Paid?</th>
-                <th className="th text-center">Rating</th>
-                <th className="th text-center">Actions</th>
+                <th className="th text-left">{t('Date')}</th>
+                <th className="th text-left">{t('Cuisine')}</th>
+                <th className="th text-left">{t('Restaurant')}</th>
+                <th className="th text-left">{t('Dish')}</th>
+                <th className="th text-right">{t('Cost')}</th>
+                <th className="th text-center">{t('Who Paid?')}</th>
+                <th className="th text-center">{t('Rating')}</th>
+                <th className="th text-center">{t('Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1825,8 +1855,8 @@ export default function App() {
                   </td>
                   <td className="td text-center">{m.rating ?? '—'}</td>
                   <td className="td text-center">
-                        <button className="btn-ghost" onClick={()=> startEdit(m)}>Edit</button>
-                        <button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>Delete</button>
+                        <button className="btn-ghost" onClick={()=> startEdit(m)}>{t('Edit')}</button>
+                        <button className="btn-ghost" onClick={()=> deleteHistory(m.id)}>{t('Delete')}</button>
                   </td>
                 </tr>
               ))}
@@ -1836,11 +1866,11 @@ export default function App() {
               <table className="table">
                 <thead>
                   <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
-                    <th className="th text-left">Date</th>
-                    <th className="th text-left">Store</th>
-                    <th className="th text-right">Amount</th>
-                    <th className="th text-center">Who Paid?</th>
-                    <th className="th text-center">Actions</th>
+                    <th className="th text-left">{t('Date')}</th>
+                    <th className="th text-left">{t('Store')}</th>
+                    <th className="th text-right">{t('Amount (USD)')}</th>
+                    <th className="th text-center">{t('Who Paid?')}</th>
+                    <th className="th text-center">{t('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1859,7 +1889,7 @@ export default function App() {
                         </span>
                       </td>
                       <td className="td text-center">
-                        <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>Delete</button>
+                        <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>{t('Delete')}</button>
                       </td>
                     </tr>
                   ))}
@@ -1873,21 +1903,21 @@ export default function App() {
 
         <div className="space-y-4">
           <div className="card p-5">
-            <div className="text-sm font-semibold mb-1">Today's Context</div>
+            <div className="text-sm font-semibold mb-1">{t("Today's Context")}</div>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <div className="label">Condition</div>
+                <div className="label">{t('Condition')}</div>
                 <div className="flex items-center gap-1 text-lg font-semibold capitalize">
                   {weatherIcon(wx.condition)} <span>{wx.condition}</span>
                 </div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">{locationName || 'Location unavailable'}</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">{locationName || t('Location unavailable')}</div>
               </div>
               <div>
-                <div className="label">Temp</div>
+                <div className="label">{t('Temp')}</div>
                 <div className="text-lg font-semibold">{wx.tempF}°F</div>
               </div>
               <div>
-                <div className="label">Month-to-date Spend</div>
+                <div className="label">{t('Month-to-date Spend')}</div>
                 <button
                   className="text-left text-lg font-semibold underline decoration-dotted"
                   onClick={() => {
@@ -1923,18 +1953,18 @@ export default function App() {
                 <div className="mt-5 space-y-3 text-xs">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                      <div className="text-zinc-600 dark:text-zinc-300">Total</div>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Total')}</div>
                       <div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div>
                     </div>
                     <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                      <div className="text-zinc-600 dark:text-zinc-300">Spent MTD</div>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Spent MTD')}</div>
                       <div className="text-base font-semibold">{currency(spent)}</div>
                       <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
-                        Meals: {currency(spentMeals)} • Groceries: {currency(spentGroceries)}
+                        {t('Meals')}: {currency(spentMeals)} • {t('Groceries')}: {currency(spentGroceries)}
                       </div>
                     </div>
                     <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                      <div className="text-zinc-600 dark:text-zinc-300">Remaining</div>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Remaining')}</div>
                       <div className={`text-base font-semibold ${spent > monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-300'}`}>
                         {currency(Math.max(0, remaining))}
                       </div>
@@ -1942,7 +1972,7 @@ export default function App() {
                   </div>
                   <div>
                     <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
-                      <span>Usage</span>
+                      <span>{t('Usage')}</span>
                       <span>{pct}%</span>
                     </div>
                     <div className="mt-1 h-2 w-full rounded bg-zinc-200 dark:bg-zinc-800 relative overflow-hidden">
@@ -1950,8 +1980,8 @@ export default function App() {
                       <div className="absolute left-0 top-0 h-2 bg-blue-500" style={{ width: `${Math.min(100, Math.round(((spentMeals + spentGroceries) / monthlyBudgetSaved) * 100))}%`, opacity: 0.6 }} />
                     </div>
                     <div className="mt-1 flex justify-end gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
-                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-emerald-500"></span> Meals</span>
-                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-blue-500 opacity-60"></span> Groceries</span>
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-emerald-500"></span> {t('Meals')}</span>
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-blue-500 opacity-60"></span> {t('Groceries')}</span>
                     </div>
                   </div>
                 </div>
@@ -2016,9 +2046,9 @@ export default function App() {
       {scoreHelpOpen && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
           <div className="w-full max-w-lg card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
-            <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> How we ranked your top choice</div>
+            <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> {t('How we ranked your top choice')}</div>
             <pre className="whitespace-pre-wrap rounded bg-zinc-100 p-3 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">{scoreHelpText}</pre>
-            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>Close</button></div>
+            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>{t('Close')}</button></div>
           </div>
         </div>
       )}
@@ -2077,23 +2107,23 @@ export default function App() {
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className="w-full max-w-3xl card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
               <div className="mb-3 flex items-center justify-between">
-                <div className="text-lg font-semibold">Spend</div>
+                <div className="text-lg font-semibold">{t('Spend')}</div>
                 <div className="flex gap-2">
-                  <button className="btn-ghost" title="Previous 6 months" onClick={()=> {
+                  <button className="btn-ghost" title={t('Previous 6 months')} onClick={()=> {
                     // move window back by 1 month
                     const [yy, mm] = spendWindowStart.split('-').map(Number);
                     const prev = new Date((yy||1970), (mm||1)-2, 1);
                     setSpendWindowStart(`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`);
                     setSpendSelection(null);
-                  }}>◀ 6mo</button>
-                  <div className="rounded border px-2 py-1 text-sm dark:border-zinc-700" title="Currently viewing a 6-month window">{windowMonths[0]} — {windowMonths[5]}</div>
-                  <button className="btn-ghost" title="Next 6 months" onClick={()=> {
+                  }}>{language === 'zh' ? '◀ 6 個月' : '◀ 6mo'}</button>
+                  <div className="rounded border px-2 py-1 text-sm dark:border-zinc-700" title={t('Currently viewing a 6-month window')}>{windowMonths[0]} — {windowMonths[5]}</div>
+                  <button className="btn-ghost" title={t('Next 6 months')} onClick={()=> {
                     // move window forward by 1 month
                     const [yy, mm] = spendWindowStart.split('-').map(Number);
                     const next = new Date((yy||1970), (mm||1), 1);
                     setSpendWindowStart(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
                     setSpendSelection(null);
-                  }}>6mo ▶</button>
+                  }}>{language === 'zh' ? '6 個月 ▶' : '6mo ▶'}</button>
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -2152,37 +2182,37 @@ export default function App() {
       </React.Fragment>
       ) : (
         <div className="card p-5">
-          <div className="text-sm font-semibold mb-2">How the ranking works</div>
+          <div className="text-sm font-semibold mb-2">{t('How the ranking works')}</div>
           <div className="space-y-3 text-sm">
             <div>
-              The score for each meal uses this formula:
+              {t('The score for each meal uses this formula:')}
               <ul className="ml-5 list-disc">
-                <li>Rating weight: (rating or 3) × 10</li>
-                <li>Recency penalty: up to −12 for very recent meals</li>
-                <li>Budget fit: +8 if within your saved budget; negative if outside</li>
-                <li>Weather bonus: +2 to +3 for cuisines matching today's weather</li>
-                <li>Random jitter: small ±1.5 to add variety</li>
+                <li>{t('Rating weight: (rating or 3) × 10')}</li>
+                <li>{t('Recency penalty: up to −12 for very recent meals')}</li>
+                <li>{t('Budget fit: +8 if within your saved budget; negative if outside')}</li>
+                <li>{t("Weather bonus: +2 to +3 for cuisines matching today's weather")}</li>
+                <li>{t('Random jitter: small ±1.5 to add variety')}</li>
               </ul>
             </div>
             <div className="rounded border p-3">
-              <div className="font-semibold mb-1">Today's context</div>
-              <div>Weather: {wx.condition} • {wx.tempF}°F • Budget: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
+              <div className="font-semibold mb-1">{t("Today's context")}</div>
+              <div>{t('Weather')}: {wx.condition} • {wx.tempF}°F • {t('Budget')}: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
             </div>
             <div>
-              <div className="font-semibold mb-1">Examples</div>
+              <div className="font-semibold mb-1">{t('Examples')}</div>
               <div className="grid gap-2 md:grid-cols-2">
                 {rankedMeals.slice(0,2).map(s => (
                   <div key={s.meal.id} className="rounded border p-3">
                     <div className="font-medium">{displayTitle(s.meal.dish)} • {displayTitle(s.meal.cuisine,'—')}</div>
                     <div className="text-xs text-zinc-600 mb-2">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}</div>
                     <ul className="ml-5 list-disc text-xs">
-                      <li>Rating weight: {Math.round((s.breakdown.ratingWeight)*10)/10}</li>
-                      <li>Recency penalty: {Math.round((s.breakdown.recencyPenalty)*10)/10}</li>
-                      <li>Budget fit: {Math.round((s.breakdown.budgetFit)*10)/10}</li>
-                      <li>Weather bonus: {Math.round((s.breakdown.weatherBonus)*10)/10}</li>
-                      <li>Jitter: {Math.round((s.breakdown.jitter)*10)/10}</li>
+                      <li>{t('Rating weight')}: {Math.round((s.breakdown.ratingWeight)*10)/10}</li>
+                      <li>{t('Recency penalty')}: {Math.round((s.breakdown.recencyPenalty)*10)/10}</li>
+                      <li>{t('Budget fit')}: {Math.round((s.breakdown.budgetFit)*10)/10}</li>
+                      <li>{t('Weather bonus')}: {Math.round((s.breakdown.weatherBonus)*10)/10}</li>
+                      <li>{t('Jitter')}: {Math.round((s.breakdown.jitter)*10)/10}</li>
                     </ul>
-                    <div className="mt-1 text-xs">Total score: <span className="font-semibold">{Math.round((s.breakdown.total)*10)/10}</span></div>
+                    <div className="mt-1 text-xs">{t('Total score')}: <span className="font-semibold">{Math.round((s.breakdown.total)*10)/10}</span></div>
                   </div>
                 ))}
               </div>
@@ -2191,7 +2221,14 @@ export default function App() {
         </div>
       )}
 
-      <EggGacha open={eggOpen} pick={picked} onClose={() => setEggOpen(false)} onOrder={handleOrder} confirmLabel={isOverride ? "Choose & Save" : "Save to Meal History"} />
+      <EggGacha
+        open={eggOpen}
+        pick={picked}
+        onClose={() => setEggOpen(false)}
+        onOrder={handleOrder}
+        confirmLabel={isOverride ? t('Choose & Save') : t('Save to Meal History')}
+        translate={t}
+      />
 
       
       {/* Toast */}

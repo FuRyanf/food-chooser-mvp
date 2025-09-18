@@ -19,6 +19,7 @@ type Props = {
   onClose: () => void;
   onOrder?: (rec: Recommendation) => void;       // NEW: callback to save
   confirmLabel?: string;                         // NEW: customize button label
+  translate: (text: string) => string;
 };
 
 const TIER_GRADIENT: Record<EggTier, string> = {
@@ -28,7 +29,7 @@ const TIER_GRADIENT: Record<EggTier, string> = {
   Diamond: "from-cyan-300 via-blue-300 to-sky-100",
 };
 
-export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }: Props) {
+export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, translate }: Props) {
   // phases: roll -> bounce -> crack -> reveal
   const [phase, setPhase] = useState<"roll" | "bounce" | "crack" | "reveal">("roll");
 
@@ -154,7 +155,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
 
               {phase !== "reveal" && (
                 <div className="absolute inset-x-6 bottom-6 rounded-2xl bg-black/50 p-3 text-center text-xs text-white backdrop-blur">
-                  FuDi is giving the egg a little shake…
+                  {translate('FuDi is giving the egg a little shake…')}
                 </div>
               )}
             </div>
@@ -170,7 +171,7 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                     exit={{ opacity: 0, x: 40 }}
                   >
                     <div className="mb-3 flex items-center gap-2 text-lg font-semibold text-amber-600 dark:text-amber-200">
-                      <EggIcon className="h-5 w-5" /> Your Mystery Pick
+                      <EggIcon className="h-5 w-5" /> {translate('Your Mystery Pick')}
                     </div>
                     {pick ? (
                       <div className="space-y-4">
@@ -179,18 +180,18 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                           <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">{pick.label}</span>
                         </div>
                         <div className="rounded-xl border border-zinc-200 bg-white/70 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/70">
-                          <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Suggested spot</div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{translate('Suggested')}</div>
                           <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                            {pick.suggestedRestaurant ?? "Chef's Choice"}
+                            {pick.suggestedRestaurant ?? translate("Chef's Choice")}
                           </div>
-                          <div className="text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? "Signature dish"}</div>
+                          <div className="text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? translate('Signature dish')}</div>
                           <div className="mt-2 flex items-center gap-1 text-sm text-zinc-700 dark:text-zinc-200">
                             <DollarSign className="h-4 w-4" />
-                            Est. ${pick.estCost.toFixed(2)}
+                            {translate('Est.')} ${pick.estCost.toFixed(2)}
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
-                          <button className="btn-outline" onClick={onClose}>Keep browsing</button>
+                          <button className="btn-outline" onClick={onClose}>{translate('Keep browsing')}</button>
                           <button
                             className="btn-primary"
                             onClick={() => {
@@ -198,12 +199,12 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                               onClose();
                             }}
                           >
-                            {confirmLabel ?? "Save to Meal History"}
+                            {confirmLabel ?? translate('Save to Meal History')}
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <div>No pick available.</div>
+                      <div>{translate('No pick available.')}</div>
                     )}
                   </motion.div>
                 ) : (
@@ -214,8 +215,8 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel }:
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 40 }}
                   >
-                    <div className="mb-2 text-base font-semibold text-zinc-800 dark:text-zinc-100">Hold tight...</div>
-                    <p>FuDi is peeking inside the egg to find a delicious surprise.</p>
+                    <div className="mb-2 text-base font-semibold text-zinc-800 dark:text-zinc-100">{translate('Hold tight...')}</div>
+                    <p>{translate('FuDi is peeking inside the egg to find a delicious surprise.')}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
