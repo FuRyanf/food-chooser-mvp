@@ -4,9 +4,15 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Home': { zh: '首頁' },
   'Browse': { zh: '瀏覽' },
   'Contributions': { zh: '貢獻' },
-  'How It Works': { zh: '運作方式' },
+  'Mystery picks & logging': { zh: '神秘推薦與紀錄' },
+  'Browse your saved meals': { zh: '瀏覽已儲存的餐點' },
+  'Track spending & contributions': { zh: '追蹤支出與分擔' },
   'Smart, fun meal picker — personalized by mood, budget, and weather.': {
     zh: '聰明又有趣的餐點挑選器，依心情、預算與天氣量身打造。',
+  },
+  'keeps dinner decisions easy': { zh: '讓晚餐選擇變得輕鬆' },
+  "Blend surprise and structure with FuDi's refreshed planner — crack an egg, log meals, and stay on top of shared budgets in one cozy dashboard.": {
+    zh: '在煥然一新的福娣儀表板中融合驚喜與規劃——敲開神秘蛋、記錄餐點並掌握共用預算，一次搞定。',
   },
   'New mystery pick ready': { zh: '神秘餐點已準備就緒' },
   'Crack Mystery Egg': { zh: '敲開神秘蛋' },
@@ -84,6 +90,7 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Meals': { zh: '餐點' },
   'Groceries': { zh: '雜貨' },
   'Total': { zh: '總計' },
+  'Total entries': { zh: '總紀錄' },
   'Total (6 mo)': { zh: '六個月總計' },
   'Spend mix by person': { zh: '個人花費組成' },
   'Shortlist': { zh: '精選清單' },
@@ -100,6 +107,7 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Use filters to refine the grid': { zh: '使用篩選條件進一步縮小結果' },
   'Search dish, restaurant, cuisine': { zh: '搜尋餐點、餐廳或料理' },
   'Showing {current} of {total} saved meals': { zh: '顯示 {total} 筆中的 {current} 筆餐點' },
+  '{meals} meals · {groceries} groceries': { zh: '餐點 {meals} 道 · 雜貨 {groceries} 筆' },
   'No meals match the current filters. Try adjusting your cuisine toggles or clearing the search.': {
     zh: '目前沒有符合篩選條件的餐點，試著調整料理篩選或清除搜尋。'
   },
@@ -169,6 +177,7 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Preferences saved.': { zh: '偏好已儲存。' },
   'Failed to save preferences.': { zh: '偏好儲存失敗。' },
   'Save Preferences': { zh: '儲存偏好' },
+  'Not set': { zh: '未設定' },
   'No repeat within (days)': { zh: '不可重複天數' },
   '0 (allow repeats)': { zh: '0（允許重複）' },
   'Egg tiers': { zh: '蛋等級' },

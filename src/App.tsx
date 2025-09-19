@@ -233,8 +233,20 @@ export default function App() {
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   const isDarkTheme = theme === 'dark';
 
-  // Tabs: Home (default), Browse, Contributions, and How
-  const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'|'how'>('home');
+  const navButtons: Array<{ key: 'home' | 'browse' | 'contributions'; label: string; icon: React.ComponentType<{ className?: string }>; description: string }> = [
+    { key: 'home', label: t('Home'), icon: Sparkles, description: t('Mystery picks & logging') },
+    { key: 'browse', label: t('Browse'), icon: Search, description: t('Browse your saved meals') },
+    { key: 'contributions', label: t('Contributions'), icon: DollarSign, description: t('Track spending & contributions') },
+  ];
+
+  const panelClass = 'rounded-3xl border border-white/60 bg-white/80 p-6 shadow-lg shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70 dark:shadow-emerald-500/10';
+  const glassCardClass = 'rounded-2xl border border-white/50 bg-white/70 p-4 shadow-sm shadow-amber-100/30 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/60';
+  const rangeButtonClass = (active: boolean) => active
+    ? 'rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-400/50'
+    : 'rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold text-zinc-600 transition hover:bg-white/90 dark:border-white/10 dark:bg-zinc-800/60 dark:text-zinc-300 dark:hover:bg-zinc-800/80';
+
+  // Tabs: Home (default), Browse, Contributions
+  const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'>('home');
   const [browseSearch, setBrowseSearch] = useState('');
   const [browseHideDisabled, setBrowseHideDisabled] = useState(false);
   const [browseSort, setBrowseSort] = useState<'recent' | 'rating' | 'cost'>('recent');
@@ -299,6 +311,20 @@ export default function App() {
   const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
   const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
+  const quickStats = useMemo(() => [
+    {
+      label: t('Budget'),
+      value: `${currency(budgetSaved.min)} – ${currency(budgetSaved.max)}`,
+    },
+    {
+      label: t('Monthly budget'),
+      value: monthlyBudgetSaved != null ? currency(monthlyBudgetSaved) : t('Not set'),
+    },
+    {
+      label: t('Total entries'),
+      value: tt('{meals} meals · {groceries} groceries', { meals: meals.length, groceries: groceries.length }),
+    },
+  ], [budgetSaved, monthlyBudgetSaved, meals, groceries, t, tt]);
   // Toast feedback
   const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   function showToast(message: string, durationMs = 2200) {
@@ -1007,87 +1033,149 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-        <div className="flex items-center justify-center h-64"><div className="text-lg">{t('Loading your food data...')}</div></div>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-100 px-4 py-10 text-zinc-900 transition-colors duration-300 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950 dark:text-zinc-100 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-3xl items-center justify-center py-20">
+          <div className="w-full space-y-4 rounded-3xl border border-white/60 bg-white/70 p-10 text-center shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/80">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-rose-400 to-purple-500 text-2xl text-white shadow-lg">
+              🍜
+            </div>
+            <div className="text-lg font-semibold">{t('Loading your food data...')}</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
-        <div className="card p-8 text-center">
-          <div className="text-red-600 mb-4">{t('Error')}: {error}</div>
-          <button className="btn-primary" onClick={() => { setError(null); loadData(); }}>{t('Retry')}</button>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-100 px-4 py-10 text-zinc-900 transition-colors duration-300 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950 dark:text-zinc-100 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-3xl items-center justify-center py-20">
+          <div className="w-full space-y-5 rounded-3xl border border-white/60 bg-white/80 p-10 text-center shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/80">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 via-red-500 to-orange-400 text-2xl text-white shadow-lg">
+              ⚠️
+            </div>
+            <div className="text-lg font-semibold text-rose-600 dark:text-rose-300">{t('Error')}: {error}</div>
+            <button className="btn-primary" onClick={() => { setError(null); loadData(); }}>{t('Retry')}</button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 text-zinc-900 transition-colors duration-300 dark:text-zinc-100 md:p-8">
-      <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            {/* Project icon if present */}
-            <img src="/logo.png" alt={appName} className="h-9 w-9 rounded object-cover" onError={(e)=>{ (e.target as HTMLImageElement).style.display='none'; }} />
-            <Sparkles className="h-6 w-6" />
-            <h1 className="text-2xl font-bold md:text-3xl">{appName}</h1>
-          </div>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{t('Smart, fun meal picker — personalized by mood, budget, and weather.')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="btn-ghost flex items-center gap-2"
-            onClick={toggleTheme}
-            aria-label={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
-            title={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
-          >
-            {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            <span className="text-xs font-medium">{isDarkTheme ? t('Light') : t('Dark')}</span>
-          </button>
-          <button
-            type="button"
-            className="btn-ghost flex items-center gap-2"
-            onClick={() => setLanguage(prev => (prev === 'en' ? 'zh' : 'en'))}
-            aria-label={t('Switch Language')}
-            title={t('Switch Language')}
-          >
-            <Languages className="h-4 w-4" />
-            <span className="text-xs font-medium">{language === 'en' ? '中文' : 'EN'}</span>
-          </button>
-          <button className={`btn-ghost ${activeTab==='home'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('home')}>{t('Home')}</button>
-          <button className={`btn-ghost ${activeTab==='browse'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={() => setActiveTab('browse')}>{t('Browse')}</button>
-          <button className={`btn-ghost ${activeTab==='contributions'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('contributions')}>{t('Contributions')}</button>
-          <button className={`btn-ghost ${activeTab==='how'?'border border-zinc-300 dark:border-zinc-700':''}`} onClick={()=> setActiveTab('how')}>{t('How It Works')}</button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-100 px-4 pb-16 pt-6 text-zinc-900 transition-colors duration-300 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950 dark:text-zinc-100 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-10">
+        <header className="overflow-hidden rounded-[2.25rem] border border-white/60 bg-white/70 px-6 py-7 shadow-2xl shadow-amber-200/30 backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/70 dark:shadow-emerald-500/10 md:px-10 md:py-10">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="relative">
+                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 via-rose-400 to-purple-500 text-2xl font-semibold text-white shadow-xl shadow-rose-200/50">{appName.slice(0, 2)}</span>
+                  <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-lg shadow-lg dark:bg-zinc-800">🥢</span>
+                </div>
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
+                    <Sparkles className="h-4 w-4" /> {t('Smart, fun meal picker — personalized by mood, budget, and weather.')}
+                  </div>
+                  <h1 className="text-3xl font-semibold leading-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
+                    {appName} {t('keeps dinner decisions easy')}
+                  </h1>
+                  <p className="max-w-xl text-sm text-zinc-600 dark:text-zinc-300">
+                    {t("Blend surprise and structure with FuDi's refreshed planner — crack an egg, log meals, and stay on top of shared budgets in one cozy dashboard.")}
+                  </p>
+                </div>
+              </div>
 
-      {activeTab==='contributions' ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {quickStats.map((stat) => (
+                  <div key={stat.label} className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
+                    <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{stat.label}</div>
+                    <div className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 self-stretch">
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn-ghost flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-4 py-2 text-xs font-medium backdrop-blur dark:border-white/10 dark:bg-zinc-800/60"
+                  onClick={toggleTheme}
+                  aria-label={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
+                  title={isDarkTheme ? t('Switch to light theme') : t('Switch to dark theme')}
+                >
+                  {isDarkTheme ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  <span>{isDarkTheme ? t('Light') : t('Dark')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-4 py-2 text-xs font-medium backdrop-blur dark:border-white/10 dark:bg-zinc-800/60"
+                  onClick={() => setLanguage(prev => (prev === 'en' ? 'zh' : 'en'))}
+                  aria-label={t('Switch Language')}
+                  title={t('Switch Language')}
+                >
+                  <Languages className="h-4 w-4" />
+                  <span>{language === 'en' ? '中文' : 'EN'}</span>
+                </button>
+              </div>
+              <nav className="rounded-3xl border border-white/60 bg-white/80 p-2 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between">
+                  {navButtons.map((nav) => {
+                    const Icon = nav.icon;
+                    const active = activeTab === nav.key;
+                    return (
+                      <button
+                        key={nav.key}
+                        type="button"
+                        onClick={() => setActiveTab(nav.key)}
+                        className={`flex flex-1 items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:focus-visible:ring-emerald-300 ${
+                          active
+                            ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-400/40'
+                            : 'hover:bg-white/70 dark:hover:bg-zinc-800/70'
+                        }`}
+                      >
+                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-2xl border ${active ? 'border-white/30 bg-white/20 text-white' : 'border-emerald-200 bg-emerald-100 text-emerald-600 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+                          <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-inherit'}`} />
+                        </span>
+                        <span className="flex flex-col">
+                          <span className="font-semibold">{nav.label}</span>
+                          <span className={`text-xs ${active ? 'text-emerald-100' : 'text-zinc-500 dark:text-zinc-400'}`}>{nav.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-8">
+          {activeTab==='contributions' ? (
         <div className="space-y-6">
           {/* Contributions Tab Content */}
-          <div className="card p-5">
+          <div className={panelClass}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-sm font-semibold">💰 {t('Spending Contributions')}</div>
                 <div className="text-xs text-zinc-600 mt-1 dark:text-zinc-400">{t("See who's been buying meals and groceries")}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  className={`btn-ghost text-xs ${contributionsDateRange === 'mtd' ? 'border border-zinc-300' : ''}`}
+                <button
+                  className={rangeButtonClass(contributionsDateRange === 'mtd')}
                   onClick={() => setContributionsDateRange('mtd')}
                 >
                   {t('Month to Date')}
                 </button>
-                <button 
-                  className={`btn-ghost text-xs ${contributionsDateRange === 'all' ? 'border border-zinc-300' : ''}`}
+                <button
+                  className={rangeButtonClass(contributionsDateRange === 'all')}
                   onClick={() => setContributionsDateRange('all')}
                 >
                   {t('All Time')}
                 </button>
-                <button 
-                  className={`btn-ghost text-xs ${contributionsDateRange === 'custom' ? 'border border-zinc-300' : ''}`}
+                <button
+                  className={rangeButtonClass(contributionsDateRange === 'custom')}
                   onClick={() => setContributionsDateRange('custom')}
                 >
                   {t('Custom')}
@@ -1337,7 +1425,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className={`${glassCardClass} bg-gradient-to-br from-white/95 via-white/70 to-emerald-50/30 dark:from-zinc-900/80 dark:via-zinc-900/60 dark:to-emerald-900/20`}>
                         <div className="mb-4 flex items-center justify-between">
                           <div className="text-sm font-semibold">{t('Recent transactions')}</div>
                           <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Most recent 6 entries in range')}</div>
@@ -1371,7 +1459,7 @@ export default function App() {
           </div>
         </div>
       ) : activeTab==='browse' ? (
-        <div className="card p-5">
+        <div className={`${panelClass} space-y-6`}>
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -1390,14 +1478,14 @@ export default function App() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  className={`btn-ghost text-xs ${browseHideDisabled ? 'border border-emerald-400 text-emerald-500 dark:border-emerald-400/50 dark:text-emerald-300' : ''}`}
+                  className={rangeButtonClass(browseHideDisabled)}
                   onClick={() => setBrowseHideDisabled(prev => !prev)}
                 >
-                  {browseHideDisabled ? 'Showing enabled' : 'Hide disabled' }
+                  {browseHideDisabled ? t('Showing enabled') : t('Hide disabled') }
                 </button>
                 <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span>{t('Sort')}:</span>
-                  <div className="inline-flex rounded-full border border-zinc-200 p-1 dark:border-zinc-700">
+                  <div className="inline-flex rounded-full border border-white/60 bg-white/70 p-1 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-800/60">
                     {[
                       { key: 'recent', label: t('Newest') },
                       { key: 'rating', label: t('Rating') },
@@ -1405,7 +1493,7 @@ export default function App() {
                     ].map(option => (
                       <button
                         key={option.key}
-                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${browseSort === option.key ? 'bg-zinc-900 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${browseSort === option.key ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow shadow-emerald-400/50' : 'text-zinc-600 hover:bg-white/80 dark:text-zinc-300 dark:hover:bg-zinc-800/80'}`}
                         onClick={() => setBrowseSort(option.key as typeof browseSort)}
                         type="button"
                       >
@@ -1418,7 +1506,7 @@ export default function App() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[250px,1fr]">
-              <aside className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-900/60 lg:sticky lg:top-6 lg:self-start">
+              <aside className={`${glassCardClass} text-sm lg:sticky lg:top-6 lg:self-start`}>
                 <div className="mb-2 flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold">{t('Filter by cuisine')}</div>
@@ -1478,10 +1566,10 @@ export default function App() {
                   return (
                     <div
                       key={entry.key}
-                      className={`rounded-2xl border p-5 transition shadow-sm hover:shadow-md ${
+                      className={`${glassCardClass} flex h-full flex-col gap-3 transition ${
                         isOff
-                          ? 'border-dashed border-zinc-300 bg-zinc-100/70 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/60'
-                          : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+                          ? 'border-dashed border-emerald-200/70 bg-white/60 text-zinc-500 opacity-80 dark:border-emerald-400/40 dark:bg-zinc-900/40'
+                          : 'bg-gradient-to-br from-white/95 via-white/75 to-emerald-50/40 hover:shadow-lg dark:from-zinc-900/80 dark:via-zinc-900/60 dark:to-emerald-900/30'
                       }`}
                     >
                       <div className="flex items-start justify-between">
@@ -1493,7 +1581,7 @@ export default function App() {
                           {latest.rating ?? '—'}★
                         </span>
                       </div>
-                      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/70 dark:text-zinc-300">
+                      <div className="mt-3 rounded-2xl border border-white/50 bg-white/70 p-3 text-xs text-zinc-600 dark:border-white/10 dark:bg-zinc-900/60 dark:text-zinc-300">
                         <div className="flex items-center justify-between">
                           <span>{t('Last logged')}</span>
                           <span>{new Date(latest.date).toISOString().slice(0,10)}</span>
@@ -1532,12 +1620,12 @@ export default function App() {
             </div>
           </div>
         </div>
-      ) : activeTab==='home' ? (
+      ) : (
         <React.Fragment>
       {/* Primary home layout */}
       <div className="grid gap-4 xl:grid-cols-[1.75fr,1fr]">
         <div className="space-y-4">
-          <div className="card p-5 space-y-4">
+          <div className={`${panelClass} space-y-4`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm font-semibold">{t('Mystery Egg')}</div>
@@ -1665,14 +1753,14 @@ export default function App() {
           </div>
 
           {/* Log Entry (Meal | Grocery Trip) */}
-          <div className="card p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold">{t('Log')}</div>
+          <div className={`${panelClass} space-y-4`}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-300">{t('Log')}</div>
               <div className="flex gap-2">
-            <button className={`btn-ghost ${logTab==='meal'?'border border-zinc-300':''}`} onClick={()=> setLogTab('meal')}>{t('Meal')}</button>
-            <button className={`btn-ghost ${logTab==='grocery'?'border border-zinc-300':''}`} onClick={()=> setLogTab('grocery')}>{t('Grocery Trip')}</button>
-          </div>
-        </div>
+                <button className={rangeButtonClass(logTab==='meal')} onClick={()=> setLogTab('meal')}>{t('Meal')}</button>
+                <button className={rangeButtonClass(logTab==='grocery')} onClick={()=> setLogTab('grocery')}>{t('Grocery Trip')}</button>
+              </div>
+            </div>
         {logTab==='meal' ? (
           <>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -1899,7 +1987,7 @@ export default function App() {
       </div>
 
         <div className="space-y-4">
-          <div className="card p-5">
+          <div className={`${panelClass} space-y-4`}>
             <div className="text-sm font-semibold mb-1">{t("Today's Context")}</div>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
@@ -1926,7 +2014,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div className="mt-4 h-[120px] rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+            <div className={`${glassCardClass} mt-4 h-[120px] bg-gradient-to-r from-white/90 via-white/70 to-emerald-50/40 dark:from-zinc-900/80 dark:via-zinc-900/60 dark:to-emerald-900/20`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#3f3f46' : '#e4e4e7'} />
@@ -1949,20 +2037,20 @@ export default function App() {
               return (
                 <div className="mt-5 space-y-3 text-xs">
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                    <div className={glassCardClass}>
                       <div className="text-zinc-600 dark:text-zinc-300">{t('Total')}</div>
-                      <div className="text-base font-semibold">{currency(monthlyBudgetSaved)}</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(monthlyBudgetSaved)}</div>
                     </div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                    <div className={glassCardClass}>
                       <div className="text-zinc-600 dark:text-zinc-300">{t('Spent MTD')}</div>
-                      <div className="text-base font-semibold">{currency(spent)}</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(spent)}</div>
                       <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
                         {t('Meals')}: {currency(spentMeals)} • {t('Groceries')}: {currency(spentGroceries)}
                       </div>
                     </div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                    <div className={glassCardClass}>
                       <div className="text-zinc-600 dark:text-zinc-300">{t('Remaining')}</div>
-                      <div className={`text-base font-semibold ${spent > monthlyBudgetSaved ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                      <div className={`mt-1 text-base font-semibold ${spent > monthlyBudgetSaved ? 'text-red-600 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-200'}`}>
                         {currency(Math.max(0, remaining))}
                       </div>
                     </div>
@@ -1986,7 +2074,7 @@ export default function App() {
             })()}
           </div>
 
-          <div className="card p-5">
+          <div className={`${panelClass} space-y-4`}>
             <div className="text-sm font-semibold mb-1">{t('Preferences & budget')}</div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
@@ -2042,7 +2130,7 @@ export default function App() {
       {/* Scoring explain modal */}
       {scoreHelpOpen && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setScoreHelpOpen(false)}>
-          <div className="w-full max-w-lg card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
+          <div className={`${panelClass} w-full max-w-lg shadow-2xl dark:shadow-lg`} onClick={e=> e.stopPropagation()}>
             <div className="mb-2 flex items-center gap-2 text-lg font-semibold"><Info className="h-5 w-5"/> {t('How we ranked your top choice')}</div>
             <pre className="whitespace-pre-wrap rounded bg-zinc-100 p-3 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">{scoreHelpText}</pre>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={()=> setScoreHelpOpen(false)}>{t('Close')}</button></div>
@@ -2102,7 +2190,7 @@ export default function App() {
         const contributingGroceries = groceries.filter(g => getLocalMonthKey(g.date.slice(0,10))===selectedMonth);
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
-            <div className="w-full max-w-3xl card p-5 shadow-2xl dark:shadow-lg" onClick={e=> e.stopPropagation()}>
+            <div className={`${panelClass} w-full max-w-3xl shadow-2xl dark:shadow-lg`} onClick={e=> e.stopPropagation()}>
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-lg font-semibold">{t('Spend')}</div>
                 <div className="flex gap-2">
@@ -2125,7 +2213,7 @@ export default function App() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="h-[220px] rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className={`${glassCardClass} h-[220px] bg-gradient-to-br from-white/90 via-white/70 to-emerald-50/40 dark:from-zinc-900/80 dark:via-zinc-900/60 dark:to-emerald-900/20`}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthData} onClick={(e:any)=> { if (e && e.activeLabel) setSpendSelection(e.activeLabel); }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#3f3f46' : '#e4e4e7'} opacity={0.7} />
@@ -2137,17 +2225,17 @@ export default function App() {
                         </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs">
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Total (6 mo)')}</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Groceries')}</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Meals')}</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
+                  <div className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
+                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Total (6 mo)')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(totalWindow)}</div></div>
+                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Groceries')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
+                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Meals')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
                   </div>
                 </div>
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-sm font-semibold">{selectedMonth}</div>
                   </div>
-                  <div className="max-h-[220px] overflow-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className={`${glassCardClass} max-h-[220px] overflow-auto bg-white/90 dark:bg-zinc-900/80`}>
                     {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
                       <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
                         <div>
@@ -2176,58 +2264,20 @@ export default function App() {
         );
       })()}
 
-      </React.Fragment>
-      ) : (
-        <div className="card p-5">
-          <div className="text-sm font-semibold mb-2">{t('How the ranking works')}</div>
-          <div className="space-y-3 text-sm">
-            <div>
-              {t('The score for each meal uses this formula:')}
-              <ul className="ml-5 list-disc">
-                <li>{t('Rating weight: (rating or 3) × 10')}</li>
-                <li>{t('Recency penalty: up to −12 for very recent meals')}</li>
-                <li>{t('Budget fit: +8 if within your saved budget; negative if outside')}</li>
-                <li>{t("Weather bonus: +2 to +3 for cuisines matching today's weather")}</li>
-                <li>{t('Random jitter: small ±1.5 to add variety')}</li>
-              </ul>
-            </div>
-            <div className="rounded border p-3">
-              <div className="font-semibold mb-1">{t("Today's context")}</div>
-              <div>{t('Weather')}: {wx.condition} • {wx.tempF}°F • {t('Budget')}: {currency(budgetSaved.min)} – {currency(budgetSaved.max)}</div>
-            </div>
-            <div>
-              <div className="font-semibold mb-1">{t('Examples')}</div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {rankedMeals.slice(0,2).map(s => (
-                  <div key={s.meal.id} className="rounded border p-3">
-                    <div className="font-medium">{displayTitle(s.meal.dish)} • {displayTitle(s.meal.cuisine,'—')}</div>
-                    <div className="text-xs text-zinc-600 mb-2">{displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}</div>
-                    <ul className="ml-5 list-disc text-xs">
-                      <li>{t('Rating weight')}: {Math.round((s.breakdown.ratingWeight)*10)/10}</li>
-                      <li>{t('Recency penalty')}: {Math.round((s.breakdown.recencyPenalty)*10)/10}</li>
-                      <li>{t('Budget fit')}: {Math.round((s.breakdown.budgetFit)*10)/10}</li>
-                      <li>{t('Weather bonus')}: {Math.round((s.breakdown.weatherBonus)*10)/10}</li>
-                      <li>{t('Jitter')}: {Math.round((s.breakdown.jitter)*10)/10}</li>
-                    </ul>
-                    <div className="mt-1 text-xs">{t('Total score')}: <span className="font-semibold">{Math.round((s.breakdown.total)*10)/10}</span></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </React.Fragment>
+        )}
         </div>
-      )}
 
-      <EggGacha
-        open={eggOpen}
-        pick={picked}
-        onClose={() => setEggOpen(false)}
-        onOrder={handleOrder}
-        confirmLabel={isOverride ? t('Choose & Save') : t('Save to Meal History')}
-        translate={t}
-      />
+        <EggGacha
+          open={eggOpen}
+          pick={picked}
+          onClose={() => setEggOpen(false)}
+          onOrder={handleOrder}
+          confirmLabel={isOverride ? t('Choose & Save') : t('Save to Meal History')}
+          translate={t}
+        />
+      </div>
 
-      
       {/* Toast */}
       {toast.show && (
         <div className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 transform">
