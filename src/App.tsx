@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2, Languages } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import EggGacha from "./components/EggGacha";
@@ -22,6 +22,14 @@ type Recommendation = {
 };
 
 type Overrides = Record<string, number>;
+
+type ConfirmDialogState = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  tone?: 'default' | 'danger';
+};
 
 const currency = (n:number)=> `$${n.toFixed(2)}`;
 
@@ -244,6 +252,36 @@ export default function App() {
   const rangeButtonClass = (active: boolean) => active
     ? 'rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-400/50'
     : 'rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold text-zinc-600 transition hover:bg-white/90 dark:border-white/10 dark:bg-zinc-800/60 dark:text-zinc-300 dark:hover:bg-zinc-800/80';
+
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const confirmResolverRef = useRef<((choice: boolean) => void) | null>(null);
+
+  const closeConfirm = useCallback((choice: boolean) => {
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(choice);
+      confirmResolverRef.current = null;
+    }
+    setConfirmDialog(null);
+  }, []);
+
+  const requestConfirm = useCallback((config: ConfirmDialogState) => {
+    return new Promise<boolean>((resolve) => {
+      confirmResolverRef.current = resolve;
+      setConfirmDialog(config);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!confirmDialog) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeConfirm(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmDialog, closeConfirm]);
 
   // Tabs: Home (default), Browse, Contributions
   const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'>('home');
@@ -783,8 +821,14 @@ export default function App() {
   async function deleteBrowseGroup(key: string) {
     const entry = browseEntries.find(e => e.key === key);
     if (!entry) return;
-    const confirm = window.confirm('Are you sure you want to delete this meal? All associated history entries will be removed.');
-    if (!confirm) return;
+    const ok = await requestConfirm({
+      title: t('Delete saved meal?'),
+      message: t('This removes every history entry for this dish.'),
+      confirmLabel: t('Delete'),
+      cancelLabel: t('Cancel'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     const [restaurantName, dishName] = key.split('|');
     const toDelete = meals.filter(m => (m.restaurant ?? '—') === restaurantName && m.dish === dishName);
     for (const m of toDelete) {
@@ -842,8 +886,14 @@ export default function App() {
 
   async function deleteHistory(id: string) {
     try {
-      const confirm = window.confirm('Are you sure you want to delete this entry? This will remove it from your dinner history.');
-      if (!confirm) return;
+      const ok = await requestConfirm({
+        title: t('Delete meal entry?'),
+        message: t('This removes it from your meal history.'),
+        confirmLabel: t('Delete'),
+        cancelLabel: t('Cancel'),
+        tone: 'danger',
+      });
+      if (!ok) return;
       await FoodChooserAPI.deleteMeal(id);
       setMeals(prev => prev.filter(m => m.id !== id));
     } catch (e) {
@@ -854,8 +904,14 @@ export default function App() {
 
   async function deleteGroceryHistory(id: string) {
     try {
-      const confirm = window.confirm('Are you sure you want to delete this grocery entry?');
-      if (!confirm) return;
+      const ok = await requestConfirm({
+        title: t('Delete grocery entry?'),
+        message: t('This removes it from your grocery history.'),
+        confirmLabel: t('Delete'),
+        cancelLabel: t('Cancel'),
+        tone: 'danger',
+      });
+      if (!ok) return;
       await FoodChooserAPI.deleteGrocery(id);
       setGroceries(prev => prev.filter(g => g.id !== id));
     } catch (e) {
@@ -1657,57 +1713,32 @@ export default function App() {
               }`}
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                <div className="flex flex-col gap-1 text-zinc-900 dark:text-zinc-100">
+                  <div className="text-lg font-semibold flex items-center gap-2">
                     <Egg className="h-5 w-5" /> {t('Ready to crack?')}
                   </div>
-                  <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    {t("Crack the shell to see today's surprise meal.")}
+                  <div className="text-sm text-zinc-600 dark:text-zinc-300">
+                    {t('FuDi will pick from your shortlist once you crack the egg.')}
                   </div>
                 </div>
                 <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <button className="btn-primary" onClick={crackEgg}>
                     <Egg className="h-4 w-4" /> {t('Crack Mystery Egg')}
                   </button>
-                  <button
-                    className="btn-outline"
-                    onClick={() => {
-                      const topCandidate = rankedMeals[0]?.meal;
-                      if (topCandidate) selectFromTopChoice(topCandidate);
-                    }}
-                    disabled={!rankedMeals.length}
-                  >
-                    {t('Quick add top pick')}
-                  </button>
+                  {rankedMeals.length > 0 && (
+                    <button
+                      className="btn-outline"
+                      onClick={() => {
+                        const topCandidate = rankedMeals[0]?.meal;
+                        if (topCandidate) selectFromTopChoice(topCandidate);
+                      }}
+                    >
+                      {t('Quick add top pick')}
+                    </button>
+                  )}
                 </div>
               </div>
-              {featuredPick ? (
-                <div className="mt-4 rounded-lg border border-amber-200/70 bg-white/80 p-4 text-sm dark:border-amber-200/40 dark:bg-amber-300/10">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-amber-600 dark:text-amber-200">{t('Sneak peek')}</div>
-                      <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                        {displayTitle(featuredPick.meal.dish)}
-                      </div>
-                      <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                        {displayTitle(featuredPick.meal.restaurant)} • {displayTitle(featuredPick.meal.cuisine, '—')}
-                      </div>
-                      <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        {t('Last logged')}: {new Date(featuredPick.meal.date).toISOString().slice(0,10)}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 text-right">
-                      <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t('Cost')}</span>
-                      <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                        {currency(featuredPick.meal.cost)}
-                      </span>
-                      {typeof featuredPick.meal.rating === 'number' && (
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{featuredPick.meal.rating}★</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              {rankedMeals.length === 0 && (
                 <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
                   {t('Add a few saved meals to unlock your mystery egg.')}
                 </div>
@@ -1716,38 +1747,34 @@ export default function App() {
             {orderOpen && (
               <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
                 <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t('Shortlist')}</div>
-                {rankedMeals.slice(0,5).map((s, idx) => {
-                  const isChosen = appPickIdx === idx;
-                  return (
-                    <div
-                      key={s.meal.id}
-                      className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-sm transition-colors ${
-                        isChosen
-                          ? 'bg-amber-50 border-amber-300 dark:bg-amber-300/15 dark:border-amber-200/40'
-                          : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
-                          {isChosen && (
-                            <span className="badge border-amber-300 bg-amber-200/60 text-amber-900 dark:border-amber-200/60 dark:bg-amber-300/20 dark:text-amber-100">
-                              {t('Featured')}
-                            </span>
-                          )}
-                          <span className="font-medium">
-                            {displayTitle(s.meal.dish)}
-                            <span className="text-zinc-500 dark:text-zinc-300"> • {displayTitle(s.meal.cuisine, '—')}</span>
-                          </span>
-                        </div>
-                        <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                          {displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}
-                          {typeof s.meal.rating === 'number' && ` • ${s.meal.rating}★`}
-                        </div>
+                {rankedMeals.slice(0,5).map((s, idx) => (
+                  <div
+                    key={s.meal.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3 text-sm transition-colors dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700 dark:bg-amber-400/20 dark:text-amber-200">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-medium">
+                          {displayTitle(s.meal.dish)}
+                          <span className="text-zinc-500 dark:text-zinc-300"> • {displayTitle(s.meal.cuisine, '—')}</span>
+                        </span>
                       </div>
-                      <button className="btn-primary" onClick={() => selectFromTopChoice(s.meal)}>{t('Select')}</button>
+                      <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                        {displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}
+                        {typeof s.meal.rating === 'number' && ` • ${s.meal.rating}★`}
+                      </div>
                     </div>
-                  );
-                })}
+                    <button className="btn-primary" onClick={() => selectFromTopChoice(s.meal)}>{t('Select')}</button>
+                  </div>
+                ))}
+                {!rankedMeals.length && (
+                  <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-300">
+                    {t('No saved meals yet—log a few to build your shortlist.')}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2285,6 +2312,36 @@ export default function App() {
             {toast.message}
           </div>
         </div>
+      )}
+
+      {confirmDialog && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-4 backdrop-blur"
+          onClick={() => closeConfirm(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-2xl border border-white/20 bg-white/95 p-5 shadow-2xl transition dark:border-zinc-700 dark:bg-zinc-900/95"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{confirmDialog.title}</div>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{confirmDialog.message}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="btn-ghost" onClick={() => closeConfirm(false)}>
+                {confirmDialog.cancelLabel}
+              </button>
+              <button
+                autoFocus
+                className={`btn-primary ${confirmDialog.tone === 'danger' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-400' : ''}`}
+                onClick={() => closeConfirm(true)}
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
