@@ -650,8 +650,6 @@ export default function App() {
     const match = rankedMeals[appPickIdx];
     return !!match && match.meal.id === featuredPick.meal.id;
   }, [rankedMeals, featuredPick, appPickIdx]);
-  const featuredBreakdown = featuredPick?.breakdown;
-
   function crackEgg(){
     setIsOverride(false);
     const top = rankedMeals.slice(0,5);
@@ -1542,9 +1540,9 @@ export default function App() {
           <div className="card p-5 space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-sm font-semibold">{t('Top choices for you')}</div>
+                <div className="text-sm font-semibold">{t('Mystery Egg')}</div>
                 <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                  {t('Note: crack the egg to see the highlighted meal, or peek at the full list if you want to pick manually.')}
+                  {t('Let FuDi crack a surprise pick or browse your shortlist.')}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1559,7 +1557,7 @@ export default function App() {
                     if (next) computeAppPick();
                   }}
                 >
-                  {orderOpen ? t('Hide list') : t('View full list')}
+                  {orderOpen ? t('Hide shortlist') : t('See shortlist')}
                 </button>
               </div>
             </div>
@@ -1573,10 +1571,10 @@ export default function App() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                    <Egg className="h-5 w-5" /> {t('Mystery egg is ready')}
+                    <Egg className="h-5 w-5" /> {t('Ready to crack?')}
                   </div>
                   <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    {t('Crack to reveal the meal we’ll spotlight for you. Want to choose yourself? Open the full list.')}
+                    {t("Crack the shell to see today's surprise meal.")}
                   </div>
                 </div>
                 <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -1596,71 +1594,69 @@ export default function App() {
                 </div>
               </div>
               {featuredPick ? (
-                <div className="mt-4 space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                    <div className="rounded border p-3 dark:border-amber-200/40 dark:bg-amber-300/10">
-                      <div className="text-zinc-600 dark:text-zinc-300">Score preview</div>
-                      <div className="text-base font-semibold">{featuredPick.score.toFixed(1)}</div>
+                <div className="mt-4 rounded-lg border border-amber-200/70 bg-white/80 p-4 text-sm dark:border-amber-200/40 dark:bg-amber-300/10">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-amber-600 dark:text-amber-200">{t('Sneak peek')}</div>
+                      <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                        {displayTitle(featuredPick.meal.dish)}
+                      </div>
+                      <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                        {displayTitle(featuredPick.meal.restaurant)} • {displayTitle(featuredPick.meal.cuisine, '—')}
+                      </div>
+                      <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        {t('Last logged')}: {new Date(featuredPick.meal.date).toISOString().slice(0,10)}
+                      </div>
                     </div>
-                    {featuredBreakdown && (
-                      <>
-                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                          <div className="text-zinc-600 dark:text-zinc-300">Budget fit</div>
-                          <div className="text-base font-semibold">{featuredBreakdown.budgetFit.toFixed(1)}</div>
-                        </div>
-                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                          <div className="text-zinc-600 dark:text-zinc-300">Weather bonus</div>
-                          <div className="text-base font-semibold">{featuredBreakdown.weatherBonus.toFixed(1)}</div>
-                        </div>
-                        <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                          <div className="text-zinc-600 dark:text-zinc-300">Random jitter</div>
-                          <div className="text-base font-semibold">{featuredBreakdown.jitter.toFixed(1)}</div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                    These metrics keep the spotlight pick a surprise while hinting at why it scored well.
+                    <div className="flex flex-col items-end gap-1 text-right">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t('Cost')}</span>
+                      <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                        {currency(featuredPick.meal.cost)}
+                      </span>
+                      {typeof featuredPick.meal.rating === 'number' && (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{featuredPick.meal.rating}★</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
-                  Save a few meals within your budget to generate mystery picks.
+                  {t('Add a few saved meals to unlock your mystery egg.')}
                 </div>
               )}
             </div>
             {orderOpen && (
               <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{t('Shortlist')}</div>
                 {rankedMeals.slice(0,5).map((s, idx) => {
                   const isChosen = appPickIdx === idx;
                   return (
                     <div
                       key={s.meal.id}
-                      className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+                      className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-sm transition-colors ${
                         isChosen
                           ? 'bg-amber-50 border-amber-300 dark:bg-amber-300/15 dark:border-amber-200/40'
                           : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
                       }`}
                     >
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
                           {isChosen && (
                             <span className="badge border-amber-300 bg-amber-200/60 text-amber-900 dark:border-amber-200/60 dark:bg-amber-300/20 dark:text-amber-100">
-                              Chosen
+                              {t('Featured')}
                             </span>
                           )}
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                            {displayTitle(s.meal.dish)}{' '}
-                            <span className="text-zinc-500 dark:text-zinc-300">• {displayTitle(s.meal.cuisine, '—')}</span>
-                          </div>
+                          <span className="font-medium">
+                            {displayTitle(s.meal.dish)}
+                            <span className="text-zinc-500 dark:text-zinc-300"> • {displayTitle(s.meal.cuisine, '—')}</span>
+                          </span>
                         </div>
                         <div className="text-xs text-zinc-600 dark:text-zinc-300">
-                          {displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)} • {s.meal.rating ?? '—'}★
+                          {displayTitle(s.meal.restaurant)} • {currency(s.meal.cost)}
+                          {typeof s.meal.rating === 'number' && ` • ${s.meal.rating}★`}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="btn-primary" onClick={()=> selectFromTopChoice(s.meal)}>Select</button>
-                      </div>
+                      <button className="btn-primary" onClick={() => selectFromTopChoice(s.meal)}>{t('Select')}</button>
                     </div>
                   );
                 })}
@@ -2142,9 +2138,9 @@ export default function App() {
                     </ResponsiveContainer>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs">
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Total (6 mo)</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Groceries</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
-                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">Meals</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Total (6 mo)')}</div><div className="text-base font-semibold">{currency(totalWindow)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Groceries')}</div><div className="text-base font-semibold">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
+                    <div className="rounded border p-3 dark:border-zinc-700 dark:bg-zinc-900"><div className="text-zinc-600 dark:text-zinc-300">{t('Meals')}</div><div className="text-base font-semibold">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
                   </div>
                 </div>
                 <div>
@@ -2155,7 +2151,7 @@ export default function App() {
                     {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
                       <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
                         <div>
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">Grocery</div>
+                          <div className="font-medium text-zinc-900 dark:text-zinc-100">{t('Grocery')}</div>
                           <div className="text-xs text-zinc-600 dark:text-zinc-300">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
                         </div>
                         <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(g.amount)}</div>
@@ -2170,11 +2166,11 @@ export default function App() {
                         <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(m.cost)}</div>
                       </div>
                     ))}
-                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="p-3 text-sm text-zinc-600 dark:text-zinc-300">No spend in this month.</div>}
+                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="p-3 text-sm text-zinc-600 dark:text-zinc-300">{t('No spend in this month.')}</div>}
                   </div>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end"><button className="btn-primary" onClick={()=> setSpendOpen(false)}>Close</button></div>
+              <div className="mt-4 flex justify-end"><button className="btn-primary" onClick={()=> setSpendOpen(false)}>{t('Close')}</button></div>
             </div>
           </div>
         );
