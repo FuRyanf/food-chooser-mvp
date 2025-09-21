@@ -306,6 +306,7 @@ export default function App() {
   const [cuisineFilter, setCuisineFilter] = useState<Record<string, boolean>>({});
   const normalizeCuisine = (c:string)=> c.trim().toLowerCase();
   const [cuisineBatchSaving, setCuisineBatchSaving] = useState<boolean>(false);
+  const [cuisineQuery, setCuisineQuery] = useState<string>('');
   // Groceries state
   type Grocery = Database['public']['Tables']['groceries']['Row'];
   const [groceries, setGroceries] = useState<Grocery[]>([]);
@@ -314,6 +315,7 @@ export default function App() {
   const [gStore, setGStore] = useState<string>('');
   const [showStoreDropdown, setShowStoreDropdown] = useState<boolean>(false);
   const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(-1);
+  const [editGrocery, setEditGrocery] = useState<Grocery | null>(null);
   useEffect(() => {
     // Load disabled items from Supabase
     (async () => {
@@ -902,6 +904,42 @@ export default function App() {
     }
   }
 
+  function startEditGrocery(entry: Grocery) {
+    setEditGrocery(entry);
+    setGDate(entry.date.slice(0, 10));
+    setGAmount(entry.amount?.toString() ?? '0');
+    setPurchaserName(entry.purchaser_name ?? '');
+    setGStore(entry.notes ?? '');
+    setShowStoreDropdown(false);
+    setSelectedStoreIndex(-1);
+  }
+
+  async function saveGroceryEdit() {
+    if (!editGrocery) return;
+    try {
+      const amt = Number(gAmount) || 0;
+      if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
+      const updated = await FoodChooserAPI.updateGrocery(editGrocery.id, {
+        date: toLocalISOString(gDate),
+        amount: amt,
+        notes: gStore || null,
+        purchaser_name: purchaserName.trim() || 'Unknown',
+      });
+      setGroceries(prev => prev
+        .map(g => g.id === updated.id ? updated : g)
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      );
+      setEditGrocery(null);
+      setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
+      setShowStoreDropdown(false);
+      setSelectedStoreIndex(-1);
+      showToast(t('Grocery trip updated'));
+    } catch (e) {
+      console.error('Save grocery edit failed', e);
+      setError('Failed to save grocery edit');
+    }
+  }
+
   async function deleteGroceryHistory(id: string) {
     try {
       const ok = await requestConfirm({
@@ -977,6 +1015,12 @@ export default function App() {
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [meals]);
+
+  const filteredCuisineOptions = useMemo(() => {
+    const query = cuisineQuery.trim().toLowerCase();
+    if (!query) return cuisineOptions;
+    return cuisineOptions.filter(c => c.toLowerCase().includes(query));
+  }, [cuisineOptions, cuisineQuery]);
 
   const cuisineCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1532,13 +1576,26 @@ export default function App() {
                   {tt('Showing {current} of {total} saved meals', { current: visibleBrowseEntries.length, total: browseEntries.length })}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  className={rangeButtonClass(browseHideDisabled)}
-                  onClick={() => setBrowseHideDisabled(prev => !prev)}
-                >
-                  {browseHideDisabled ? t('Showing enabled') : t('Hide disabled') }
-                </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>{t('View')}:</span>
+                  <div className="inline-flex rounded-full border border-white/60 bg-white/70 p-1 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-800/60">
+                    <button
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${browseHideDisabled ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow shadow-emerald-400/50' : 'text-zinc-600 hover:bg-white/80 dark:text-zinc-300 dark:hover:bg-zinc-800/80'}`}
+                      onClick={() => setBrowseHideDisabled(true)}
+                      type="button"
+                    >
+                      {t('Enabled only')}
+                    </button>
+                    <button
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${!browseHideDisabled ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow shadow-emerald-400/50' : 'text-zinc-600 hover:bg-white/80 dark:text-zinc-300 dark:hover:bg-zinc-800/80'}`}
+                      onClick={() => setBrowseHideDisabled(false)}
+                      type="button"
+                    >
+                      {t('Include disabled')}
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span>{t('Sort')}:</span>
                   <div className="inline-flex rounded-full border border-white/60 bg-white/70 p-1 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-800/60">
@@ -1562,8 +1619,8 @@ export default function App() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[250px,1fr]">
-              <aside className={`${glassCardClass} text-sm lg:sticky lg:top-6 lg:self-start`}>
-                <div className="mb-2 flex items-center justify-between">
+              <aside className={`${glassCardClass} space-y-3 text-sm lg:sticky lg:top-6 lg:self-start`}>
+                <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold">{t('Filter by cuisine')}</div>
                     <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Toggle to refine the grid')}</div>
@@ -1573,8 +1630,17 @@ export default function App() {
                     <button className="btn-ghost text-[11px]" onClick={handleCuisineClear}>{t('Clear')}</button>
                   </div>
                 </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    className="input w-full border border-zinc-200 pl-8 text-xs dark:border-zinc-700"
+                    placeholder={t('Search cuisines')}
+                    value={cuisineQuery}
+                    onChange={e => setCuisineQuery(e.target.value)}
+                  />
+                </div>
                 <div className="max-h-72 space-y-2 overflow-auto pr-1">
-                  {cuisineOptions.map(c => {
+                  {filteredCuisineOptions.map(c => {
                     const key = normalizeCuisine(c);
                     const on = cuisineFilter[key] !== false;
                     return (
@@ -1602,9 +1668,11 @@ export default function App() {
                       </label>
                     );
                   })}
-                  {!cuisineOptions.length && (
+                  {filteredCuisineOptions.length === 0 && (
                     <div className="rounded-lg border border-dashed border-zinc-300 p-3 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                      {t('Add meals to build cuisine filters.')}
+                      {cuisineOptions.length
+                        ? t('No cuisines match your search.')
+                        : t('Add meals to build cuisine filters.')}
                     </div>
                   )}
                 </div>
@@ -1911,20 +1979,44 @@ export default function App() {
                 )}
         </div>
                   </div>
-            <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={async ()=>{
-              const amt = Number(gAmount) || 0;
-              if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
-              await FoodChooserAPI.addGrocery({ 
-                date: toLocalISOString(gDate), 
-                amount: amt, 
-                notes: gStore || null,
-                purchaser_name: purchaserName.trim() || 'Unknown'
-              });
-              const latest = await FoodChooserAPI.getGroceries();
-              setGroceries(latest);
-              setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
-              showToast(t('Grocery trip saved'));
-            }}>{t('Save Trip')}</button></div>
+            <div className="mt-3 flex justify-end gap-2">
+                {editGrocery && (
+                  <button
+                    className="btn-ghost"
+                    onClick={() => {
+                      setEditGrocery(null);
+                      setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
+                      setShowStoreDropdown(false);
+                      setSelectedStoreIndex(-1);
+                    }}
+                >
+                  {t('Cancel')}
+                </button>
+              )}
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  if (editGrocery) {
+                    await saveGroceryEdit();
+                    return;
+                  }
+                  const amt = Number(gAmount) || 0;
+                  if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
+                  await FoodChooserAPI.addGrocery({
+                    date: toLocalISOString(gDate),
+                    amount: amt,
+                    notes: gStore || null,
+                    purchaser_name: purchaserName.trim() || 'Unknown'
+                  });
+                  const latest = await FoodChooserAPI.getGroceries();
+                  setGroceries(latest);
+                  setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
+                  showToast(t('Grocery trip saved'));
+                }}
+              >
+                {editGrocery ? t('Save Changes') : t('Save Trip')}
+              </button>
+            </div>
           </>
         )}
         {/* Shared History section */}
@@ -2001,7 +2093,10 @@ export default function App() {
                         </span>
                       </td>
                       <td className="td text-center">
-                        <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>{t('Delete')}</button>
+                        <div className="flex justify-center gap-1">
+                          <button className="btn-ghost" onClick={()=> startEditGrocery(g)}>{t('Edit')}</button>
+                          <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>{t('Delete')}</button>
+                        </div>
                       </td>
                     </tr>
                   ))}

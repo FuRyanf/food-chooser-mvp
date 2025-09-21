@@ -16,6 +16,7 @@ type DisabledItemInsert = Database['public']['Tables']['disabled_items']['Insert
 
 type Grocery = Database['public']['Tables']['groceries']['Row']
 type GroceryInsert = Database['public']['Tables']['groceries']['Insert']
+type GroceryUpdate = Database['public']['Tables']['groceries']['Update']
 
 // For now, we'll use a simple user ID. In a real app, you'd implement proper auth
 const DEMO_USER_ID = 'demo-user-123'
@@ -67,6 +68,25 @@ export class FoodChooserAPI {
       .select()
       .single()
     if (error) throw error
+    return data
+  }
+
+  static async updateGrocery(id: string, updates: Partial<GroceryUpdate>): Promise<Grocery> {
+    checkSupabase()
+
+    const { data, error } = await supabase!
+      .from('groceries')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', DEMO_USER_ID)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error updating grocery:', error)
+      throw error
+    }
+
     return data
   }
 
