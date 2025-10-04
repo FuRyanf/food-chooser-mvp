@@ -2610,26 +2610,56 @@ export default function App() {
         const windowMonths: string[] = Array.from({ length: 6 }, (_, i) => monthKey(new Date((y||1970), (m||1)-1 + i, 1)));
         const monthMapMeals = new Map<string, number>();
         const monthMapGroceries = new Map<string, number>();
-        for (const mm of windowMonths) { monthMapMeals.set(mm, 0); monthMapGroceries.set(mm, 0); }
+        const monthMapTravel = new Map<string, number>();
+        for (const mm of windowMonths) {
+          monthMapMeals.set(mm, 0);
+          monthMapGroceries.set(mm, 0);
+          monthMapTravel.set(mm, 0);
+        }
         for (const meal of meals) {
           const k = getLocalMonthKey(meal.date.slice(0,10));
           if (windowMonths.includes(k) && !isSeedMeal(meal)) monthMapMeals.set(k, (monthMapMeals.get(k) ?? 0) + meal.cost);
         }
         for (const g of groceries) {
           const k = getLocalMonthKey(g.date.slice(0,10));
-          if (windowMonths.includes(k)) monthMapGroceries.set(k, (monthMapGroceries.get(k) ?? 0) + g.amount);
+          if (windowMonths.includes(k)) {
+            const isTravel = (g.trip_label ?? '').trim().length > 0;
+            if (isTravel) {
+              monthMapTravel.set(k, (monthMapTravel.get(k) ?? 0) + g.amount);
+            } else {
+              monthMapGroceries.set(k, (monthMapGroceries.get(k) ?? 0) + g.amount);
+            }
+          }
         }
         const monthData = windowMonths.map(k => ({
           month: k,
           meals: Math.round((monthMapMeals.get(k) ?? 0)*100)/100,
           groceries: Math.round((monthMapGroceries.get(k) ?? 0)*100)/100,
+          travel: Math.round((monthMapTravel.get(k) ?? 0)*100)/100,
         }));
         const totalMealsWindow = monthData.reduce((s, d) => s + d.meals, 0);
         const totalGroceriesWindow = monthData.reduce((s, d) => s + d.groceries, 0);
-        const totalWindow = Math.round((totalMealsWindow + totalGroceriesWindow) * 100) / 100;
+        const totalTravelWindow = monthData.reduce((s, d) => s + d.travel, 0);
+        const totalWindow = Math.round((totalMealsWindow + totalGroceriesWindow + totalTravelWindow) * 100) / 100;
         const selectedMonth = windowMonths.includes(spendSelection || '') ? (spendSelection as string) : windowMonths[5];
         const contributingMeals = meals.filter(m => getLocalMonthKey(m.date.slice(0,10))===selectedMonth && !isSeedMeal(m));
-        const contributingGroceries = groceries.filter(g => getLocalMonthKey(g.date.slice(0,10))===selectedMonth);
+        const contributingGroceries = groceries.filter(g => {
+          const sameMonth = getLocalMonthKey(g.date.slice(0,10)) === selectedMonth;
+          const isTravel = (g.trip_label ?? '').trim().length > 0;
+          return sameMonth && !isTravel;
+        });
+        const contributingTravel = groceries.filter(g => {
+          const sameMonth = getLocalMonthKey(g.date.slice(0,10)) === selectedMonth;
+          const isTravel = (g.trip_label ?? '').trim().length > 0;
+          return sameMonth && isTravel;
+        });
+        function sortByDateDesc<T extends { date: string }>(items: T[]): T[] {
+          return items.slice().sort((a,b)=> +new Date(b.date) - +new Date(a.date));
+        }
+        const travelEntries = sortByDateDesc(contributingTravel);
+        const groceryEntries = sortByDateDesc(contributingGroceries);
+        const mealEntries = sortByDateDesc(contributingMeals);
+        const hasSpendEntries = travelEntries.length > 0 || groceryEntries.length > 0 || mealEntries.length > 0;
         return (
           <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={()=> setSpendOpen(false)}>
             <div className={`${panelClass} w-full max-w-3xl shadow-2xl dark:shadow-lg`} onClick={e=> e.stopPropagation()}>
@@ -2662,15 +2692,43 @@ export default function App() {
                           <XAxis dataKey="month" stroke={theme === 'dark' ? '#d4d4d8' : '#3f3f46'} tick={{ fill: theme === 'dark' ? '#d4d4d8' : '#3f3f46' }} />
                           <YAxis stroke={theme === 'dark' ? '#d4d4d8' : '#3f3f46'} tick={{ fill: theme === 'dark' ? '#d4d4d8' : '#3f3f46' }} />
                           <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', color: theme === 'dark' ? '#e4e4e7' : '#0f172a', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb' }} labelStyle={{ color: theme === 'dark' ? '#e4e4e7' : '#0f172a' }} />
-                          <Bar dataKey="meals" stackId="a" fill="#10b981" />
-                          <Bar dataKey="groceries" stackId="a" fill="#3b82f6" fillOpacity={0.7} />
+                          <Bar dataKey="groceries" stackId="a" fill="#22c55e" />
+                          <Bar dataKey="meals" stackId="a" fill="#f97316" />
+                          <Bar dataKey="travel" stackId="a" fill="#0ea5e9" />
                         </BarChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
-                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Total (6 mo)')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(totalWindow)}</div></div>
-                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Groceries')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(Math.round(totalGroceriesWindow*100)/100)}</div></div>
-                    <div className={`${glassCardClass} text-left`}><div className="text-zinc-600 dark:text-zinc-300">{t('Meals')}</div><div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(Math.round(totalMealsWindow*100)/100)}</div></div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>{t('Groceries')}</span>
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>{t('Meals')}</span>
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-sky-500"></span>{t('Travel')}</span>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="font-semibold text-zinc-700 dark:text-zinc-200">{t('Total (6 mo)')}</span>
+                      <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{currency(totalWindow)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                        {t('Groceries')}
+                      </span>
+                      <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{currency(Math.round(totalGroceriesWindow*100)/100)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-orange-500"></span>
+                        {t('Meals')}
+                      </span>
+                      <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{currency(Math.round(totalMealsWindow*100)/100)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500"></span>
+                        {t('Travel')}
+                      </span>
+                      <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{currency(Math.round(totalTravelWindow*100)/100)}</span>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -2678,25 +2736,56 @@ export default function App() {
                     <div className="text-sm font-semibold">{selectedMonth}</div>
                   </div>
                   <div className={`${glassCardClass} max-h-[220px] overflow-auto bg-white/90 dark:bg-zinc-900/80`}>
-                    {contributingGroceries.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(g => (
-                      <div key={`g-${g.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
-                        <div>
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">{t('Grocery')}</div>
-                          <div className="text-xs text-zinc-600 dark:text-zinc-300">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
-                        </div>
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(g.amount)}</div>
-                      </div>
-                    ))}
-                    {contributingMeals.concat([]).sort((a,b)=> +new Date(b.date) - +new Date(a.date)).map(m => (
-                      <div key={`m-${m.id}`} className="flex items-center justify-between border-b py-2 text-sm last:border-b-0 dark:border-zinc-700">
-                        <div>
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">{displayTitle(m.dish)} <span className="text-zinc-500 dark:text-zinc-300">• {displayTitle(m.cuisine, '—')}</span></div>
-                          <div className="text-xs text-zinc-600 dark:text-zinc-300">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
-                        </div>
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(m.cost)}</div>
-                      </div>
-                    ))}
-                    {contributingMeals.length===0 && contributingGroceries.length===0 && <div className="p-3 text-sm text-zinc-600 dark:text-zinc-300">{t('No spend in this month.')}</div>}
+                    {!hasSpendEntries ? (
+                      <div className="p-3 text-sm text-zinc-600 dark:text-zinc-300">{t('No spend in this month.')}</div>
+                    ) : (
+                      <>
+                        {travelEntries.length > 0 && (
+                          <div className="border-b border-zinc-200 pb-2 dark:border-zinc-700">
+                            <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-300">{t('Travel')}</div>
+                            {travelEntries.map(g => (
+                              <div key={`t-${g.id}`} className="flex items-center justify-between border-t py-2 text-sm first:border-t-0 dark:border-zinc-700">
+                                <div>
+                                  <div className="font-medium text-zinc-900 dark:text-zinc-100">{(g.trip_label ?? '').trim() || t('Travel')}</div>
+                                  <div className="text-xs text-zinc-600 dark:text-zinc-300">{(g.notes ?? '—')} • {g.date.slice(0,10)}</div>
+                                </div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(g.amount)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {groceryEntries.length > 0 && (
+                          <div className={`${travelEntries.length ? 'mt-2' : ''} border-b border-zinc-200 pb-2 dark:border-zinc-700`}>
+                            <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{t('Groceries')}</div>
+                            {groceryEntries.map(g => (
+                              <div key={`g-${g.id}`} className="flex items-center justify-between border-t py-2 text-sm first:border-t-0 dark:border-zinc-700">
+                                <div>
+                                  <div className="font-medium text-zinc-900 dark:text-zinc-100">{t('Grocery')}</div>
+                                  <div className="text-xs text-zinc-600 dark:text-zinc-300">{g.notes ?? '—'} • {g.date.slice(0,10)}</div>
+                                </div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(g.amount)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {mealEntries.length > 0 && (
+                          <div className={`${travelEntries.length || groceryEntries.length ? 'mt-2' : ''}`}>
+                            <div className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">{t('Meals')}</div>
+                            {mealEntries.map(m => (
+                              <div key={`m-${m.id}`} className="flex items-center justify-between border-t py-2 text-sm first:border-t-0 dark:border-zinc-700">
+                                <div>
+                                  <div className="font-medium text-zinc-900 dark:text-zinc-100">{displayTitle(m.dish)} <span className="text-zinc-500 dark:text-zinc-300">• {displayTitle(m.cuisine, '—')}</span></div>
+                                  <div className="text-xs text-zinc-600 dark:text-zinc-300">{displayTitle(m.restaurant)} • {m.date.slice(0,10)}</div>
+                                </div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{currency(m.cost)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
