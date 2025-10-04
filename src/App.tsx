@@ -6,6 +6,7 @@ import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
 import { createPortal } from 'react-dom';
 import { Language, translateTemplate, translateText } from './lib/i18n';
+import crackedEggImg from '../image cracked egg.png';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type MealInsert = Database['public']['Tables']['meals']['Insert'];
@@ -1207,8 +1208,13 @@ export default function App() {
             <div className="space-y-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <div className="relative">
-                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 via-rose-400 to-purple-500 text-2xl font-semibold text-white shadow-xl shadow-rose-200/50">{appName.slice(0, 2)}</span>
-                  <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-lg shadow-lg dark:bg-zinc-800">🥢</span>
+                  <div className="h-16 w-16 overflow-hidden rounded-3xl border border-white/70 shadow-xl shadow-rose-200/50 dark:border-white/10">
+                    <img
+                      src={crackedEggImg}
+                      alt={t('FuDi holding a mystery egg')}
+                      className="h-full w-full object-cover object-[55%_32%]"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
