@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { Language, translateTemplate, translateText } from './lib/i18n';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
+type MealInsert = Database['public']['Tables']['meals']['Insert'];
 type Weather = { condition: 'hot'|'cold'|'mild'|'rain'; tempF: number };
 type Budget = { min: number; max: number };
 type EggTier = 'Bronze'|'Silver'|'Gold'|'Diamond';
@@ -122,7 +123,7 @@ function pseudoWeatherFallback(): Weather {
 }
 function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
 
-const seedMeals: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
+const seedMeals: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>[] = [
   { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null, seed_only: false, purchaser_name: 'Unknown' },
   { date: new Date(Date.now()-86400000*5).toISOString(), cuisine:'Japanese', dish:'Salmon Poke', restaurant:'Poke House', cost:19.2, rating:5, notes: null, seed_only: false, purchaser_name: 'Unknown' },
   { date: new Date(Date.now()-86400000*3).toISOString(), cuisine:'Italian', dish:'Margherita Pizza', restaurant:"Tony's", cost:24.0, rating:4, notes: null, seed_only: false, purchaser_name: 'Unknown' },
@@ -595,7 +596,7 @@ export default function App() {
     catch (err) { setError('Failed to load demo data'); }
   }
 
-  async function addMeal(mealData: Omit<Meal, 'id' | 'user_id' | 'created_at' | 'updated_at'>){
+  async function addMeal(mealData: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>){
     try { const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
     catch (err) { setError('Failed to add meal'); }
   }
@@ -746,10 +747,18 @@ export default function App() {
   const [rating, setRating] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
   const [seedFlag, setSeedFlag] = useState<boolean>(false);
-  const [purchaserName, setPurchaserName] = useState<string>('');
-  const [logTab, setLogTab] = useState<'meal'|'grocery'>('meal');
+  const [mealPurchaserName, setMealPurchaserName] = useState<string>('');
+  const [groceryPurchaserName, setGroceryPurchaserName] = useState<string>('');
+  const [logTab, setLogTab] = useState<'meal'|'grocery'|'travel'>('meal');
+  const [travelTag, setTravelTag] = useState<string>('');
+  const [travelAmount, setTravelAmount] = useState<string>('100');
+  const [travelDate, setTravelDate] = useState<string>(todayISO());
+  const [travelNotes, setTravelNotes] = useState<string>('');
+  const [travelPurchaserName, setTravelPurchaserName] = useState<string>('');
+  const [travelSaving, setTravelSaving] = useState<boolean>(false);
   // Contributions tab state
   const [contributionsDateRange, setContributionsDateRange] = useState<'mtd' | 'all' | 'custom'>('mtd');
+  const [contributionsView, setContributionsView] = useState<'overview' | 'travelTags'>('overview');
   const [customDays, setCustomDays] = useState<string>('30');
 
   function titleCase(s: string) {
@@ -779,10 +788,10 @@ export default function App() {
       rating, 
       notes: (seeded ? `${SEED_TAG} ` : '') + (notes || '') || null,
       seed_only: seeded,
-      purchaser_name: purchaserName.trim() || 'Unknown'
+      purchaser_name: mealPurchaserName.trim() || 'Unknown'
     };
     await addMeal(mealData);
-    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false); setPurchaserName('');
+    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false); setMealPurchaserName('');
   }
 
   async function handleOrder(rec: Recommendation) {
@@ -908,7 +917,7 @@ export default function App() {
     setEditGrocery(entry);
     setGDate(entry.date.slice(0, 10));
     setGAmount(entry.amount?.toString() ?? '0');
-    setPurchaserName(entry.purchaser_name ?? '');
+    setGroceryPurchaserName(entry.purchaser_name ?? '');
     setGStore(entry.notes ?? '');
     setShowStoreDropdown(false);
     setSelectedStoreIndex(-1);
@@ -923,14 +932,14 @@ export default function App() {
         date: toLocalISOString(gDate),
         amount: amt,
         notes: gStore || null,
-        purchaser_name: purchaserName.trim() || 'Unknown',
+        purchaser_name: groceryPurchaserName.trim() || 'Unknown',
       });
       setGroceries(prev => prev
         .map(g => g.id === updated.id ? updated : g)
         .sort((a, b) => +new Date(b.date) - +new Date(a.date))
       );
       setEditGrocery(null);
-      setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
+      setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
       setShowStoreDropdown(false);
       setSelectedStoreIndex(-1);
       showToast(t('Grocery trip updated'));
@@ -958,6 +967,24 @@ export default function App() {
     }
   }
 
+  async function deleteTravelEntry(id: string) {
+    try {
+      const ok = await requestConfirm({
+        title: t('Remove travel log?'),
+        message: t('This deletes the tagged travel spend record.'),
+        confirmLabel: t('Delete'),
+        cancelLabel: t('Cancel'),
+        tone: 'danger',
+      });
+      if (!ok) return;
+      await FoodChooserAPI.deleteGrocery(id);
+      setGroceries(prev => prev.filter(g => g.id !== id));
+    } catch (e) {
+      console.error('Delete travel entry failed', e);
+      setError('Failed to delete travel entry');
+    }
+  }
+
   // Extract unique stores from grocery history for autocomplete
   const uniqueStores = useMemo(() => {
     const stores = groceries
@@ -981,6 +1008,16 @@ export default function App() {
       store.toLowerCase().includes(query)
     ).slice(0, 5); // Limit to 5 suggestions
   }, [gStore, uniqueStores]);
+
+  const travelEntries = useMemo(() => {
+    return groceries.filter(g => (g.trip_label ?? '').trim().length > 0)
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  }, [groceries]);
+
+  const groceryEntries = useMemo(() => {
+    return groceries.filter(g => !(g.trip_label ?? '').trim())
+      .sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  }, [groceries]);
 
   // For Browse: compute deduped entries by (restaurant, dish) with latest date and latest price (case-insensitive)
   const browseEntries = useMemo(() => {
@@ -1259,9 +1296,10 @@ export default function App() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-sm font-semibold">💰 {t('Spending Contributions')}</div>
-                <div className="text-xs text-zinc-600 mt-1 dark:text-zinc-400">{t("See who's been buying meals and groceries")}</div>
+                <div className="text-xs text-zinc-600 mt-1 dark:text-zinc-400">{t("See who's been buying meals, groceries, and travel")}</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
                 <button
                   className={rangeButtonClass(contributionsDateRange === 'mtd')}
                   onClick={() => setContributionsDateRange('mtd')}
@@ -1295,6 +1333,21 @@ export default function App() {
                   </div>
                 )}
               </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className={rangeButtonClass(contributionsView === 'overview')}
+                    onClick={() => setContributionsView('overview')}
+                  >
+                    {t('Overview')}
+                  </button>
+                  <button
+                    className={rangeButtonClass(contributionsView === 'travelTags')}
+                    onClick={() => setContributionsView('travelTags')}
+                  >
+                    {t('Travel Tags')}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {(() => {
@@ -1319,29 +1372,39 @@ export default function App() {
               }
 
               const recentMeals = meals.filter(m => new Date(m.date) >= cutoffDate && !isSeedMeal(m));
-              const recentGroceries = groceries.filter(g => new Date(g.date) >= cutoffDate);
+              const recentGroceriesAll = groceries.filter(g => new Date(g.date) >= cutoffDate);
+              const recentTravel = recentGroceriesAll.filter(g => (g.trip_label ?? '').trim().length > 0);
+              const recentGroceries = recentGroceriesAll.filter(g => !(g.trip_label ?? '').trim());
 
               // Calculate spending by person
-              const spendingByPerson: Record<string, { meals: number, groceries: number, total: number }> = {};
-              
-              // Process meals
+              const spendingByPerson: Record<string, { meals: number; groceries: number; travel: number; total: number }> = {};
+
+              const ensurePersonBucket = (person: string) => {
+                if (!spendingByPerson[person]) {
+                  spendingByPerson[person] = { meals: 0, groceries: 0, travel: 0, total: 0 };
+                }
+                return spendingByPerson[person];
+              };
+
               recentMeals.forEach(m => {
                 const person = m.purchaser_name || 'Unknown';
-                if (!spendingByPerson[person]) {
-                  spendingByPerson[person] = { meals: 0, groceries: 0, total: 0 };
-                }
-                spendingByPerson[person].meals += m.cost;
-                spendingByPerson[person].total += m.cost;
+                const bucket = ensurePersonBucket(person);
+                bucket.meals += m.cost;
+                bucket.total += m.cost;
               });
 
-              // Process groceries
               recentGroceries.forEach(g => {
                 const person = g.purchaser_name || 'Unknown';
-                if (!spendingByPerson[person]) {
-                  spendingByPerson[person] = { meals: 0, groceries: 0, total: 0 };
-                }
-                spendingByPerson[person].groceries += g.amount;
-                spendingByPerson[person].total += g.amount;
+                const bucket = ensurePersonBucket(person);
+                bucket.groceries += g.amount;
+                bucket.total += g.amount;
+              });
+
+              recentTravel.forEach(g => {
+                const person = g.purchaser_name || 'Unknown';
+                const bucket = ensurePersonBucket(person);
+                bucket.travel += g.amount;
+                bucket.total += g.amount;
               });
 
               const people = Object.keys(spendingByPerson);
@@ -1349,11 +1412,129 @@ export default function App() {
 
               const getPersonColor = (person: string) => {
                 switch (person) {
-                  case 'Ryan': return { bg: 'bg-blue-500', light: 'bg-blue-100', text: 'text-blue-800' };
-                  case 'Rachel': return { bg: 'bg-purple-500', light: 'bg-purple-100', text: 'text-purple-800' };
-                  default: return { bg: 'bg-gray-500', light: 'bg-gray-100', text: 'text-gray-600' };
+                  case 'Ryan':
+                    return { bg: 'bg-blue-500', light: 'bg-blue-100', darkBg: 'dark:bg-blue-500/20', text: 'text-blue-800', darkText: 'dark:text-blue-100' };
+                  case 'Rachel':
+                    return { bg: 'bg-purple-500', light: 'bg-purple-100', darkBg: 'dark:bg-purple-500/20', text: 'text-purple-800', darkText: 'dark:text-purple-100' };
+                  default:
+                    return { bg: 'bg-gray-500', light: 'bg-gray-100', darkBg: 'dark:bg-zinc-500/20', text: 'text-gray-600', darkText: 'dark:text-zinc-100' };
                 }
               };
+
+              if (contributionsView === 'travelTags') {
+                if (!recentTravel.length) {
+                  return (
+                    <div className="py-8 text-center text-zinc-600 dark:text-zinc-300">
+                      <div className="mb-2 text-lg">{t('No travel spend in this range.')}</div>
+                      <div className="text-sm">{t('Log travel-tagged grocery entries to see insights here.')}</div>
+                    </div>
+                  );
+                }
+
+                const travelTagMap = new Map<string, { total: number; count: number; lastDate: Date; perPerson: Record<string, number> }>();
+                recentTravel.forEach(entry => {
+                  const label = (entry.trip_label ?? '').trim() || '—';
+                  if (!travelTagMap.has(label)) {
+                    travelTagMap.set(label, { total: 0, count: 0, lastDate: new Date(entry.date), perPerson: {} });
+                  }
+                  const bucket = travelTagMap.get(label)!;
+                  bucket.total += entry.amount;
+                  bucket.count += 1;
+                  const entryDate = new Date(entry.date);
+                  if (entryDate.getTime() > bucket.lastDate.getTime()) {
+                    bucket.lastDate = entryDate;
+                  }
+                  const person = entry.purchaser_name || 'Unknown';
+                  bucket.perPerson[person] = (bucket.perPerson[person] ?? 0) + entry.amount;
+                });
+
+                const tagRows = Array.from(travelTagMap.entries()).map(([tag, info]) => ({
+                  tag,
+                  total: Number(info.total.toFixed(2)),
+                  count: info.count,
+                  lastDate: info.lastDate,
+                  people: Object.entries(info.perPerson)
+                    .map(([name, amount]) => ({ name, amount: Number(amount.toFixed(2)) }))
+                    .sort((a, b) => b.amount - a.amount),
+                })).sort((a, b) => b.total - a.total);
+
+                const totalTravelAmount = tagRows.reduce((sum, row) => sum + row.total, 0);
+                const uniqueTags = tagRows.length;
+                const topTag = tagRows[0];
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-2xl border border-sky-200/70 bg-sky-50/60 p-4 dark:border-sky-500/40 dark:bg-sky-500/10">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-300">{t('Total Travel Spend')}</div>
+                        <div className="mt-2 text-2xl font-bold text-sky-700 dark:text-sky-200">{currency(totalTravelAmount)}</div>
+                        <div className="text-xs text-sky-600/80 dark:text-sky-300/80">{tt('{count} transactions', { count: recentTravel.length })}</div>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/60 p-4 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{t('Travel Transactions')}</div>
+                        <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-200">{recentTravel.length}</div>
+                        <div className="text-xs text-emerald-600/80 dark:text-emerald-300/80">{t('Total entries')}</div>
+                      </div>
+                      <div className="rounded-2xl border border-purple-200/70 bg-purple-50/60 p-4 dark:border-purple-500/40 dark:bg-purple-500/10">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">{t('Unique Travel Tags')}</div>
+                        <div className="mt-2 text-2xl font-bold text-purple-700 dark:text-purple-200">{uniqueTags}</div>
+                        <div className="text-xs text-purple-600/80 dark:text-purple-300/80">{t('Tag')}</div>
+                      </div>
+                      <div className="rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">{t('Top Travel Tag')}</div>
+                        <div className="mt-2 text-lg font-semibold text-amber-700 dark:text-amber-200">{topTag?.tag ?? '—'}</div>
+                        <div className="text-xs text-amber-600/80 dark:text-amber-300/80">{topTag ? currency(topTag.total) : t('No spending data found')}</div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+                      <div className="mb-4">
+                        <div className="text-sm font-semibold">{t('Travel tag contributions')}</div>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Sorted by total spend within selected range')}</div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="table">
+                          <thead>
+                            <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
+                              <th className="th text-left">{t('Tag')}</th>
+                              <th className="th text-center">{t('Travel Transactions')}</th>
+                              <th className="th text-right">{t('Amount (USD)')}</th>
+                              <th className="th text-left">{t('Per person')}</th>
+                              <th className="th text-left">{t('Last logged')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tagRows.map(row => (
+                              <tr key={`${row.tag}-${row.lastDate.getTime()}`} className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                                <td className="td">{row.tag}</td>
+                                <td className="td text-center">{row.count}</td>
+                                <td className="td text-right">{currency(row.total)}</td>
+                                <td className="td">
+                                  <div className="flex flex-wrap gap-1">
+                                    {row.people.map(({ name, amount }) => {
+                                      const color = getPersonColor(name);
+                                      return (
+                                        <span
+                                          key={`${row.tag}-${name}`}
+                                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${color.light} ${color.darkBg} ${color.text} ${color.darkText}`}
+                                        >
+                                          {name}
+                                          <span className="font-semibold">{currency(amount)}</span>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
+                                <td className="td">{row.lastDate.toISOString().slice(0,10)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
 
               if (people.length === 0) {
                 return (
@@ -1369,6 +1550,7 @@ export default function App() {
                   const palette = ['#6366f1', '#a855f7', '#22c55e', '#f97316', '#0ea5e9', '#f59e0b'];
                   const mealCountByPerson: Record<string, number> = {};
                   const groceryCountByPerson: Record<string, number> = {};
+                  const travelCountByPerson: Record<string, number> = {};
                   recentMeals.forEach(m => {
                     const person = m.purchaser_name || 'Unknown';
                     mealCountByPerson[person] = (mealCountByPerson[person] ?? 0) + 1;
@@ -1377,22 +1559,30 @@ export default function App() {
                     const person = g.purchaser_name || 'Unknown';
                     groceryCountByPerson[person] = (groceryCountByPerson[person] ?? 0) + 1;
                   });
+                  recentTravel.forEach(g => {
+                    const person = g.purchaser_name || 'Unknown';
+                    travelCountByPerson[person] = (travelCountByPerson[person] ?? 0) + 1;
+                  });
                   const stackedData = people.map((person, idx) => {
                     const mealsAmount = Number(spendingByPerson[person].meals.toFixed(2));
                     const groceriesAmount = Number(spendingByPerson[person].groceries.toFixed(2));
+                    const travelAmount = Number(spendingByPerson[person].travel.toFixed(2));
                     const totalAmount = Number(spendingByPerson[person].total.toFixed(2));
                     return {
                       person,
                       Meals: mealsAmount,
                       Groceries: groceriesAmount,
+                      Travel: travelAmount,
                       Total: totalAmount,
                       color: palette[idx % palette.length],
                       mealCount: mealCountByPerson[person] ?? 0,
                       groceryCount: groceryCountByPerson[person] ?? 0,
+                      travelCount: travelCountByPerson[person] ?? 0,
                     };
                   });
                   const totalMealsAmount = stackedData.reduce((sum, d) => sum + d.Meals, 0);
                   const totalGroceriesAmount = stackedData.reduce((sum, d) => sum + d.Groceries, 0);
+                  const totalTravelAmount = stackedData.reduce((sum, d) => sum + d.Travel, 0);
                   const pieData = stackedData.map((d, idx) => ({ name: d.person, value: d.Total, fill: palette[idx % palette.length] }));
                   const axisColor = theme === 'dark' ? '#e4e4e7' : '#3f3f46';
                   const gridColor = theme === 'dark' ? '#3f3f46' : '#e4e4e7';
@@ -1416,6 +1606,15 @@ export default function App() {
                       amount: g.amount,
                       date: new Date(g.date),
                     })),
+                    ...recentTravel.map(g => ({
+                      id: `t-${g.id}`,
+                      type: 'Travel' as const,
+                      label: (g.trip_label ?? '').trim() || t('Travel'),
+                      place: (g.notes ?? '').trim() || t('Travel Tag'),
+                      person: g.purchaser_name || 'Unknown',
+                      amount: g.amount,
+                      date: new Date(g.date),
+                    })),
                   ]
                     .sort((a, b) => b.date.getTime() - a.date.getTime())
                     .slice(0, 6);
@@ -1431,11 +1630,13 @@ export default function App() {
                           <span>•</span>
                           <span>{recentGroceries.length} grocery txns</span>
                           <span>•</span>
+                          <span>{recentTravel.length} travel txns</span>
+                          <span>•</span>
                           <span>Total {currency(totalSpending)}</span>
                         </div>
                       </div>
 
-                      <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded-2xl border border-orange-200/70 bg-orange-50/50 p-4 dark:border-orange-500/40 dark:bg-orange-500/10">
                           <div className="text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-300">{t('Meals')}</div>
                           <div className="mt-2 text-2xl font-bold text-orange-700 dark:text-orange-200">{currency(totalMealsAmount)}</div>
@@ -1446,10 +1647,15 @@ export default function App() {
                           <div className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-200">{currency(totalGroceriesAmount)}</div>
                           <div className="text-xs text-emerald-600/80 dark:text-emerald-300/80">{tt('{count} transactions', { count: recentGroceries.length })}</div>
                         </div>
+                        <div className="rounded-2xl border border-sky-200/70 bg-sky-50/60 p-4 dark:border-sky-500/40 dark:bg-sky-500/10">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-300">{t('Travel')}</div>
+                          <div className="mt-2 text-2xl font-bold text-sky-700 dark:text-sky-200">{currency(totalTravelAmount)}</div>
+                          <div className="text-xs text-sky-600/80 dark:text-sky-300/80">{tt('{count} transactions', { count: recentTravel.length })}</div>
+                        </div>
                         <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 dark:border-blue-500/40 dark:bg-blue-500/10">
                           <div className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">{t('Total')}</div>
                           <div className="mt-2 text-2xl font-bold text-blue-700 dark:text-blue-200">{currency(totalSpending)}</div>
-                          <div className="text-xs text-blue-600/80 dark:text-blue-300/80">{tt('{count} transactions', { count: recentMeals.length + recentGroceries.length })}</div>
+                          <div className="text-xs text-blue-600/80 dark:text-blue-300/80">{tt('{count} transactions', { count: recentMeals.length + recentGroceries.length + recentTravel.length })}</div>
                         </div>
                       </div>
 
@@ -1458,11 +1664,12 @@ export default function App() {
                           <div className="mb-4 flex items-center justify-between">
                             <div>
                               <div className="text-sm font-semibold">{t('Spend mix by person')}</div>
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Stacked by meals and groceries')}</div>
+                              <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Stacked by meals, groceries, and travel')}</div>
                             </div>
                             <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>{t('Meals')}</span>
                               <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>{t('Groceries')}</span>
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-orange-500"></span>{t('Meals')}</span>
+                              <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-sky-500"></span>{t('Travel')}</span>
                             </div>
                           </div>
                           <div className="h-[260px]">
@@ -1476,8 +1683,9 @@ export default function App() {
                                   cursor={{ fill: theme === 'dark' ? '#27272a' : '#f4f4f5' }}
                                   contentStyle={{ backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', border: '1px solid', borderColor: theme === 'dark' ? '#3f3f46' : '#e5e7eb', color: axisColor }}
                                 />
-                                <Bar dataKey="Meals" stackId="a" fill="#f97316" radius={[6, 6, 0, 0]} />
                                 <Bar dataKey="Groceries" stackId="a" fill="#22c55e" radius={[0, 0, 6, 6]} />
+                                <Bar dataKey="Meals" stackId="a" fill="#f97316" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="Travel" stackId="a" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -1517,7 +1725,7 @@ export default function App() {
                                 </div>
                                 <div className="text-right">
                                   <div className="font-semibold text-zinc-700 dark:text-zinc-100">{currency(d.Total)} ({shareFormatter(d.Total)})</div>
-                                  <div>{t('Meals')}: {d.mealCount} • {t('Groceries')}: {d.groceryCount}</div>
+                                  <div>{t('Meals')}: {d.mealCount} • {t('Groceries')}: {d.groceryCount} • {t('Travel')}: {d.travelCount}</div>
                                 </div>
                               </div>
                             ))}
@@ -1532,18 +1740,22 @@ export default function App() {
                         </div>
                         <div className="grid gap-2 text-sm">
                           {activity.length ? (
-                            activity.map(item => (
-                              <div key={item.id} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
-                                <div>
-                                  <div className="font-medium text-zinc-800 dark:text-zinc-100">{item.label}</div>
-                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{t(item.type === 'Meal' ? 'Meal' : 'Groceries')} • {item.person} • {item.date.toISOString().slice(0,10)}</div>
+                            activity.map(item => {
+                              const typeLabel = item.type === 'Meal' ? t('Meal') : item.type === 'Grocery' ? t('Groceries') : t('Travel');
+                              const detailLabel = item.type === 'Meal' ? item.place : item.type === 'Grocery' ? t('Grocery Trip') : item.place;
+                              return (
+                                <div key={item.id} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                                  <div>
+                                    <div className="font-medium text-zinc-800 dark:text-zinc-100">{item.label}</div>
+                                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{typeLabel} • {item.person} • {item.date.toISOString().slice(0,10)}</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-semibold text-zinc-800 dark:text-zinc-100">{currency(item.amount)}</div>
+                                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{detailLabel}</div>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="font-semibold text-zinc-800 dark:text-zinc-100">{currency(item.amount)}</div>
-                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{item.type === 'Meal' ? item.place : t('Grocery Trip')}</div>
-                                </div>
-                              </div>
-                            ))
+                              );
+                            })
                           ) : (
                             <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
                               {t('No activity found for this range.')}
@@ -1854,75 +2066,76 @@ export default function App() {
               <div className="flex gap-2">
                 <button className={rangeButtonClass(logTab==='meal')} onClick={()=> setLogTab('meal')}>{t('Meal')}</button>
                 <button className={rangeButtonClass(logTab==='grocery')} onClick={()=> setLogTab('grocery')}>{t('Grocery Trip')}</button>
+                <button className={rangeButtonClass(logTab==='travel')} onClick={()=> setLogTab('travel')}>{t('Travel')}</button>
               </div>
             </div>
         {logTab==='meal' ? (
           <>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <div className="label">{t('Date')}</div>
-            <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">{t('Cost (USD)')}</div>
-            <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
-          </div>
-          <div>
-            <div className="label">{t('Cuisine')}</div>
-            <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
-            <datalist id="cuisine-list">
-              {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
-            </datalist>
-          </div>
-          <div>
-            <div className="label">{t('Restaurant')}</div>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <div className="label">{t('Date')}</div>
+                <input className="input" type="date" value={date} onChange={e=> setDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">{t('Cost (USD)')}</div>
+                <input className="input" type="number" value={cost} onChange={e=> setCost(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">{t('Cuisine')}</div>
+                <input className="input" list="cuisine-list" value={cuisineInput} onChange={e=> setCuisineInput(e.target.value)} />
+                <datalist id="cuisine-list">
+                  {['Mexican','Japanese','Italian','American','Thai','Indian','Ramen','Pho','Curry','Salad', ...cuisines].filter((v,i,a)=> a.indexOf(v)===i).map(c=> <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div>
+                <div className="label">{t('Restaurant')}</div>
                 <input className="input" list="restaurant-list" value={restaurant} onChange={e=> setRestaurant(e.target.value)} placeholder="e.g., Chipotle" />
                 <datalist id="restaurant-list">{restaurantOptions.map(r => <option key={r} value={r} />)}</datalist>
-          </div>
-          <div>
-            <div className="label">{t('Dish')}</div>
+              </div>
+              <div>
+                <div className="label">{t('Dish')}</div>
                 <input className="input" list="dish-list" value={dish} onChange={e=> setDish(e.target.value)} placeholder="e.g., Burrito Bowl" />
                 <datalist id="dish-list">{dishOptions.map(d => <option key={d} value={d} />)}</datalist>
-          </div>
-          <div>
-            <div className="label">{t('Rating')} (1-5)</div>
-            <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
-          </div>
-          <div>
-            <div className="label">{t('Who Paid?')}</div>
-            <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
-          </div>
-          <div className="md:col-span-2 lg:col-span-3">
-            <div className="label">{t('Notes')}</div>
-            <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
-          </div>
+              </div>
+              <div>
+                <div className="label">{t('Rating')} (1-5)</div>
+                <input className="input" type="number" min={1} max={5} value={rating} onChange={e=> setRating(Math.max(1, Math.min(5, Number(e.target.value)||1)))} />
+              </div>
+              <div>
+                <div className="label">{t('Who Paid?')}</div>
+                <input className="input" value={mealPurchaserName} onChange={e=> setMealPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
+              </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <div className="label">{t('Notes')}</div>
+                <textarea className="input" rows={2} value={notes} onChange={e=> setNotes(e.target.value)} placeholder="Any context, cravings, mood…" />
+              </div>
               <label className="md:col-span-2 lg:col-span-3 mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={seedFlag} onChange={e=> setSeedFlag(e.target.checked)} />
                 {t("Mark as seed (won't count toward spend)")}
               </label>
-        </div>
+            </div>
             <div className="mt-3 flex justify-end"><button className="btn-primary" onClick={submitMeal}>{t('Save Meal')}</button></div>
           </>
-        ) : (
+        ) : logTab==='grocery' ? (
           <>
             <div className="grid gap-3 md:grid-cols-4">
               <div>
                 <div className="label">{t('Date')}</div>
                 <input className="input" type="date" value={gDate} onChange={e=> setGDate(e.target.value)} />
-        </div>
+              </div>
               <div>
                 <div className="label">{t('Amount (USD)')}</div>
                 <input className="input" type="number" value={gAmount} onChange={e=> setGAmount(e.target.value)} />
-      </div>
+              </div>
               <div>
                 <div className="label">{t('Who Paid?')}</div>
-                <input className="input" value={purchaserName} onChange={e=> setPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
+                <input className="input" value={groceryPurchaserName} onChange={e=> setGroceryPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
               </div>
               <div className="relative">
                 <div className="label">{t('Store')}</div>
-                <input 
-                  className="input" 
-                  value={gStore} 
+                <input
+                  className="input"
+                  value={gStore}
                   onChange={e=> {
                     setGStore(e.target.value);
                     setShowStoreDropdown(e.target.value.trim().length > 0);
@@ -1932,15 +2145,15 @@ export default function App() {
                   onBlur={() => setTimeout(() => setShowStoreDropdown(false), 200)}
                   onKeyDown={(e) => {
                     if (!showStoreDropdown || filteredStores.length === 0) return;
-                    
+
                     if (e.key === 'ArrowDown') {
                       e.preventDefault();
-                      setSelectedStoreIndex(prev => 
+                      setSelectedStoreIndex(prev =>
                         prev < filteredStores.length - 1 ? prev + 1 : 0
                       );
                     } else if (e.key === 'ArrowUp') {
                       e.preventDefault();
-                      setSelectedStoreIndex(prev => 
+                      setSelectedStoreIndex(prev =>
                         prev > 0 ? prev - 1 : filteredStores.length - 1
                       );
                     } else if (e.key === 'Enter' && selectedStoreIndex >= 0) {
@@ -1953,7 +2166,7 @@ export default function App() {
                       setSelectedStoreIndex(-1);
                     }
                   }}
-                  placeholder="e.g., Trader Joe's" 
+                  placeholder="e.g., Trader Joe's"
                 />
                 {showStoreDropdown && filteredStores.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
@@ -1977,18 +2190,18 @@ export default function App() {
                     ))}
                   </div>
                 )}
-        </div>
-                  </div>
+              </div>
+            </div>
             <div className="mt-3 flex justify-end gap-2">
-                {editGrocery && (
-                  <button
-                    className="btn-ghost"
-                    onClick={() => {
-                      setEditGrocery(null);
-                      setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
-                      setShowStoreDropdown(false);
-                      setSelectedStoreIndex(-1);
-                    }}
+              {editGrocery && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    setEditGrocery(null);
+                    setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
+                    setShowStoreDropdown(false);
+                    setSelectedStoreIndex(-1);
+                  }}
                 >
                   {t('Cancel')}
                 </button>
@@ -2006,15 +2219,85 @@ export default function App() {
                     date: toLocalISOString(gDate),
                     amount: amt,
                     notes: gStore || null,
-                    purchaser_name: purchaserName.trim() || 'Unknown'
+                    purchaser_name: groceryPurchaserName.trim() || 'Unknown'
                   });
                   const latest = await FoodChooserAPI.getGroceries();
                   setGroceries(latest);
-                  setGDate(todayISO()); setGAmount('50'); setGStore(''); setPurchaserName('');
+                  setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
                   showToast(t('Grocery trip saved'));
                 }}
               >
                 {editGrocery ? t('Save Changes') : t('Save Trip')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div>
+                <div className="label">{t('Date')}</div>
+                <input className="input" type="date" value={travelDate} onChange={e => setTravelDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">{t('Amount (USD)')}</div>
+                <input className="input" type="number" value={travelAmount} onChange={e => setTravelAmount(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">{t('Travel Tag')}</div>
+                <input className="input" value={travelTag} onChange={e => setTravelTag(e.target.value)} placeholder={t('e.g., Europe 2025')} />
+              </div>
+              <div>
+                <div className="label">{t('Who Paid?')}</div>
+                <input className="input" value={travelPurchaserName} onChange={e => setTravelPurchaserName(e.target.value)} placeholder="e.g., Ryan, Rachel" />
+              </div>
+              <div className="md:col-span-4">
+                <div className="label">{t('Notes')}</div>
+                <textarea
+                  className="input"
+                  rows={3}
+                  value={travelNotes}
+                  onChange={e => setTravelNotes(e.target.value)}
+                  placeholder={t('List what you covered: meals, rides, local transit. Skip shipping, plane tickets, and hotels.')}
+                />
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t('Keep this for on-the-ground costs only—no shipping, plane tickets, or hotel fares.')}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                className="btn-primary"
+                disabled={travelSaving}
+                onClick={async () => {
+                  const amt = Number(travelAmount) || 0;
+                  if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
+                  const tag = travelTag.trim();
+                  if (!tag) { showToast(t('Add a travel tag first.')); return; }
+                  try {
+                    setTravelSaving(true);
+                    await FoodChooserAPI.addGrocery({
+                      date: toLocalISOString(travelDate),
+                      amount: amt,
+                      notes: travelNotes.trim() || null,
+                      trip_label: tag,
+                      purchaser_name: travelPurchaserName.trim() || 'Unknown'
+                    });
+                    const latest = await FoodChooserAPI.getGroceries();
+                    setGroceries(latest);
+                    setTravelAmount('100');
+                    setTravelTag('');
+                    setTravelPurchaserName('');
+                    setTravelNotes('');
+                    showToast(t('Travel spend saved'));
+                  } catch (err) {
+                    console.error('Travel save failed', err);
+                    showToast(t('Failed to save travel spend'));
+                  } finally {
+                    setTravelSaving(false);
+                  }
+                }}
+              >
+                {travelSaving ? t('Saving…') : t('Save Travel Log')}
               </button>
             </div>
           </>
@@ -2066,7 +2349,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
-            ) : (
+            ) : logTab==='grocery' ? (
               <table className="table">
                 <thead>
                   <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
@@ -2078,7 +2361,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(showAllHistory ? groceries : groceries.slice(0,5)).map(g => (
+                  {(showAllHistory ? groceryEntries : groceryEntries.slice(0,5)).map(g => (
                     <tr key={g.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
                       <td className="td">{g.date.slice(0,10)}</td>
                       <td className="td">{g.notes ?? '—'}</td>
@@ -2096,6 +2379,43 @@ export default function App() {
                         <div className="flex justify-center gap-1">
                           <button className="btn-ghost" onClick={()=> startEditGrocery(g)}>{t('Edit')}</button>
                           <button className="btn-ghost" onClick={()=> deleteGroceryHistory(g.id)}>{t('Delete')}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr className="bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
+                    <th className="th text-left">{t('Date')}</th>
+                    <th className="th text-left">{t('Tag')}</th>
+                    <th className="th text-left">{t('Notes')}</th>
+                    <th className="th text-right">{t('Amount (USD)')}</th>
+                    <th className="th text-center">{t('Who Paid?')}</th>
+                    <th className="th text-center">{t('Actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllHistory ? travelEntries : travelEntries.slice(0,5)).map(entry => (
+                    <tr key={entry.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                      <td className="td">{entry.date.slice(0,10)}</td>
+                      <td className="td">{entry.trip_label ?? '—'}</td>
+                      <td className="td">{entry.notes ?? '—'}</td>
+                      <td className="td text-right">{currency(entry.amount)}</td>
+                      <td className="td text-center">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          entry.purchaser_name === 'Ryan' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-100' :
+                          entry.purchaser_name === 'Rachel' ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-100' :
+                          'bg-gray-100 text-gray-600 dark:bg-zinc-700 dark:text-zinc-100'
+                        }`}>
+                          {entry.purchaser_name || 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="td text-center">
+                        <div className="flex justify-center gap-1">
+                          <button className="btn-ghost" onClick={()=> deleteTravelEntry(entry.id)}>{t('Delete')}</button>
                         </div>
                       </td>
                     </tr>

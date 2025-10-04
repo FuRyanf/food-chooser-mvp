@@ -159,7 +159,6 @@ export interface Database {
           updated_at?: string
         }
       }
-      ,
       groceries: {
         Row: {
           id: string
@@ -167,6 +166,7 @@ export interface Database {
           date: string
           amount: number
           notes: string | null
+          trip_label: string | null
           purchaser_name: string
           created_at: string
           updated_at: string
@@ -177,6 +177,7 @@ export interface Database {
           date: string
           amount: number
           notes?: string | null
+          trip_label?: string | null
           purchaser_name?: string
           created_at?: string
           updated_at?: string
@@ -187,6 +188,7 @@ export interface Database {
           date?: string
           amount?: number
           notes?: string | null
+          trip_label?: string | null
           purchaser_name?: string
           created_at?: string
           updated_at?: string

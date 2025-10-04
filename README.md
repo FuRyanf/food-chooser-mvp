@@ -9,6 +9,7 @@ Includes a “Gacha Egg” animation inspired by Puzzles & Dragons — crack ope
 - Weighted Random Selection – Picks meals based on configurable score weighting.
 - Surprise Me – Let the algorithm choose for you, or override manually.
 - Meal History – Tracks past chosen meals.
+- Travel Log – Track shared travel expenses without cluttering everyday browsing.
 - Responsive UI – Works well on desktop and mobile.
 - Tier-based Egg Designs – Bronze, Silver, Gold, Diamond with confetti.
 

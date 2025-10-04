@@ -53,7 +53,10 @@ This will create:
 - `meals` table for storing dinner history
 - `user_preferences` table for budget and settings
 - `cuisine_overrides` table for learning user preferences
+- Optional `trip_label` column on groceries for travel tagging
 - Proper indexes and Row Level Security (RLS) policies
+
+If you already applied the base schema previously, rerun the updated snippet at the end of `supabase-schema.sql` to add the `trip_label` column to existing tables.
 
 ## Step 5: Install Dependencies
 
@@ -77,9 +80,10 @@ This will install the new `@supabase/supabase-js` dependency.
 ## Step 7: Verify Database Operations
 
 1. In your Supabase dashboard, go to **Table Editor**
-2. You should see your three tables: `meals`, `user_preferences`, `cuisine_overrides`
+2. You should see your tables: `meals`, `user_preferences`, `cuisine_overrides`
 3. Try adding a meal in the app, then check the `meals` table
 4. Update budget settings and check the `user_preferences` table
+5. Add a travel log entry and confirm the `trip_label` column on `groceries` updates
 
 ## Troubleshooting
 

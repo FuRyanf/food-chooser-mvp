@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS public.groceries (
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     amount DECIMAL(10,2) NOT NULL CHECK (amount >= 0),
     notes TEXT,
+    trip_label TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -150,3 +151,7 @@ CREATE POLICY IF NOT EXISTS "Allow all operations for demo user" ON public.groce
     FOR ALL USING (user_id = 'demo-user-123');
 
 GRANT ALL ON public.groceries TO anon, authenticated;
+
+DO $$ BEGIN
+  ALTER TABLE public.groceries ADD COLUMN IF NOT EXISTS trip_label TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
