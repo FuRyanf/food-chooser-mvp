@@ -159,6 +159,99 @@ npm run build
 ```
 The build output will be in the `dist/` folder.
 
+## Deployment to Vercel
+
+This app is fully compatible with Vercel and can be deployed in minutes!
+
+### Quick Deploy 🚀
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/food-chooser-mvp)
+
+### Manual Deployment Steps
+
+#### 1. **Prepare Your Repository**
+Make sure your code is pushed to GitHub, GitLab, or Bitbucket.
+
+#### 2. **Connect to Vercel**
+1. Go to [vercel.com](https://vercel.com) and sign up/login
+2. Click **"New Project"**
+3. Import your repository
+4. Vercel will automatically detect it's a Vite app
+
+#### 3. **Configure Environment Variables** 
+⚠️ **CRITICAL**: Your app won't work without these environment variables!
+
+In the Vercel dashboard during setup (or later in Project Settings → Environment Variables):
+
+**Add these two variables:**
+
+| Variable Name | Value | Notes |
+|---------------|-------|--------|
+| `VITE_SUPABASE_URL` | `https://your-project-id.supabase.co` | From Supabase Dashboard → Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | From Supabase Dashboard → Settings → API |
+
+**🔍 How to find your Supabase values:**
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project → **Settings** → **API**  
+3. Copy **Project URL** and **anon public** key
+
+#### 4. **Deploy**
+1. Click **"Deploy"**
+2. Vercel will build and deploy your app automatically
+3. You'll get a live URL like `https://your-app-name.vercel.app`
+
+#### 5. **Custom Domain (Optional)**
+1. In Vercel dashboard → **Domains**
+2. Add your custom domain
+3. Follow DNS setup instructions
+
+### Build Configuration
+
+The project includes a `vercel.json` configuration that:
+- ✅ Handles Single Page Application (SPA) routing
+- ✅ Optimizes asset caching  
+- ✅ Uses the correct build command and output directory
+- ✅ Serves all routes through `index.html` for client-side routing
+
+### Automatic Deployments
+
+Once connected, Vercel will automatically:
+- 🔄 **Deploy on every push** to your main branch
+- 🌿 **Create preview deployments** for pull requests  
+- 📦 **Build optimized production bundles**
+- 🌐 **Provide HTTPS by default**
+
+### Environment Variables for Different Environments
+
+You can set different Supabase projects for production vs development:
+
+**Production (.vercel):**
+```bash
+VITE_SUPABASE_URL=https://your-prod-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_prod_anon_key
+```
+
+**Development (.env.local):**
+```bash
+VITE_SUPABASE_URL=https://your-dev-project.supabase.co  
+VITE_SUPABASE_ANON_KEY=your_dev_anon_key
+```
+
+### Troubleshooting Deployment
+
+**Build Fails:**
+- Check that all dependencies are in `package.json`
+- Verify TypeScript compiles locally: `npm run build`
+
+**App Loads but Shows Supabase Errors:**
+- Verify environment variables are set correctly in Vercel
+- Check Supabase project is active and accessible
+- Ensure database schema is applied (see Supabase Setup section)
+
+**404 Errors on Page Refresh:**
+- The `vercel.json` config handles this automatically
+- All routes redirect to `index.html` for proper SPA behavior
+
 ## Tech Stack
 
 - React + TypeScript
