@@ -222,6 +222,32 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Cancel': { zh: '取消' },
   'Save': { zh: '儲存' },
   'Edit Dinner Entry': { zh: '編輯餐點紀錄' },
+  
+  // Household Onboarding
+  'Welcome to FuDi!': { zh: '歡迎來到福娣！' },
+  'Let\'s set up your household to start tracking meals and expenses together.': { zh: '讓我們設定你的家庭帳戶，開始一起追蹤餐點與花費吧。' },
+  'Create New Household': { zh: '建立新家庭' },
+  'Join Existing Household': { zh: '加入現有家庭' },
+  'You can only belong to one household at a time': { zh: '你只能同時屬於一個家庭' },
+  'Create Your Household': { zh: '建立你的家庭' },
+  'Choose a name for your household. You can invite others later!': { zh: '為你的家庭選擇一個名稱，稍後可以邀請其他人！' },
+  'Household Name': { zh: '家庭名稱' },
+  'e.g., The Smith Family, Roommates, etc.': { zh: '例如：史密斯家庭、室友們等' },
+  'Creating...': { zh: '建立中...' },
+  'Create Household': { zh: '建立家庭' },
+  '← Back': { zh: '← 返回' },
+  'Join a Household': { zh: '加入家庭' },
+  'To join an existing household, you\'ll need an invitation.': { zh: '要加入現有家庭，你需要一個邀請連結。' },
+  'How to join:': { zh: '如何加入：' },
+  'Ask a household member to generate an invite link from their Household Settings': { zh: '請家庭成員從「家庭設定」產生邀請連結' },
+  'They\'ll share the invite link with you (via email, text, Slack, etc.)': { zh: '他們會透過電子郵件、簡訊、Slack 等方式分享連結給你' },
+  'Click the link to automatically join their household': { zh: '點擊連結即可自動加入他們的家庭' },
+  'Note:': { zh: '注意：' },
+  'Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.': { zh: '邀請連結在 7 天後過期，且只能使用一次。系統不會自動發送電子郵件，連結須手動分享。' },
+  '← Back to options': { zh: '← 返回選項' },
+  'Please enter a household name': { zh: '請輸入家庭名稱' },
+  'Database connection not available': { zh: '資料庫連線無法使用' },
+  'Failed to create household': { zh: '建立家庭失敗' },
 };
 
 export function translateText(text: string, language: Language): string {

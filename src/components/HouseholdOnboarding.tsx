@@ -1,9 +1,17 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { translateText, type Language } from '../lib/i18n'
 
 interface HouseholdOnboardingProps {
   userId: string
   onComplete: () => void
+}
+
+// Get initial language from localStorage or default to 'en'
+function resolveInitialLanguage(): Language {
+  if (typeof window === 'undefined') return 'en'
+  const stored = localStorage.getItem('language')
+  return (stored === 'zh' ? 'zh' : 'en') as Language
 }
 
 export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnboardingProps) {
@@ -11,15 +19,24 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
   const [householdName, setHouseholdName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [language, setLanguage] = useState<Language>(() => resolveInitialLanguage())
+  
+  const t = (text: string) => translateText(text, language)
+  
+  const toggleLanguage = () => {
+    const newLang: Language = language === 'en' ? 'zh' : 'en'
+    setLanguage(newLang)
+    localStorage.setItem('language', newLang)
+  }
 
   const handleCreateHousehold = async () => {
     if (!householdName.trim()) {
-      setError('Please enter a household name')
+      setError(t('Please enter a household name'))
       return
     }
 
     if (!supabase) {
-      setError('Database connection not available')
+      setError(t('Database connection not available'))
       return
     }
 
@@ -64,7 +81,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
       onComplete()
     } catch (err: any) {
       console.error('Error creating household:', err)
-      setError(err.message || 'Failed to create household')
+      setError(err.message || t('Failed to create household'))
     } finally {
       setLoading(false)
     }
@@ -78,14 +95,24 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
+          {/* Language Toggle */}
+          <div className="flex justify-end">
+            <button
+              onClick={toggleLanguage}
+              className="px-3 py-1.5 text-xs sm:text-sm rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              {language === 'en' ? '中文' : 'EN'}
+            </button>
+          </div>
+
           {/* Header */}
           <div className="text-center">
             <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🏠</div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Welcome to FuDi!
+              {t('Welcome to FuDi!')}
             </h1>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-              Let's set up your household to start tracking meals and expenses together.
+              {t('Let\'s set up your household to start tracking meals and expenses together.')}
             </p>
           </div>
 
@@ -97,7 +124,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             >
               <span className="flex items-center gap-2 sm:gap-3">
                 <span className="text-xl sm:text-2xl">✨</span>
-                <span className="text-sm sm:text-base">Create New Household</span>
+                <span className="text-sm sm:text-base">{t('Create New Household')}</span>
               </span>
               <span className="text-lg sm:text-xl group-hover:translate-x-1 transition-transform">→</span>
             </button>
@@ -108,14 +135,14 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             >
               <span className="flex items-center gap-2 sm:gap-3">
                 <span className="text-xl sm:text-2xl">👥</span>
-                <span className="text-sm sm:text-base">Join Existing Household</span>
+                <span className="text-sm sm:text-base">{t('Join Existing Household')}</span>
               </span>
               <span className="text-lg sm:text-xl group-hover:translate-x-1 transition-transform">→</span>
             </button>
           </div>
 
           <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 text-center">
-            You can only belong to one household at a time
+            {t('You can only belong to one household at a time')}
           </p>
         </div>
       </div>
@@ -126,14 +153,24 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
+          {/* Language Toggle */}
+          <div className="flex justify-end">
+            <button
+              onClick={toggleLanguage}
+              className="px-3 py-1.5 text-xs sm:text-sm rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              {language === 'en' ? '中文' : 'EN'}
+            </button>
+          </div>
+
           {/* Header */}
           <div className="text-center">
             <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">✨</div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Create Your Household
+              {t('Create Your Household')}
             </h1>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-              Choose a name for your household. You can invite others later!
+              {t('Choose a name for your household. You can invite others later!')}
             </p>
           </div>
 
@@ -141,13 +178,13 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
           <div className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Household Name
+                {t('Household Name')}
               </label>
               <input
                 type="text"
                 value={householdName}
                 onChange={(e) => setHouseholdName(e.target.value)}
-                placeholder="e.g., The Smith Family, Roommates, etc."
+                placeholder={t('e.g., The Smith Family, Roommates, etc.')}
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
                 disabled={loading}
                 autoFocus
@@ -165,7 +202,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
               disabled={loading || !householdName.trim()}
               className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-2.5 sm:py-3 px-5 sm:px-6 rounded-lg transition-colors min-h-[44px] text-sm sm:text-base"
             >
-              {loading ? 'Creating...' : 'Create Household'}
+              {loading ? t('Creating...') : t('Create Household')}
             </button>
 
             <button
@@ -173,7 +210,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
               disabled={loading}
               className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium py-2 transition-colors min-h-[44px] text-sm sm:text-base"
             >
-              ← Back
+              {t('← Back')}
             </button>
           </div>
         </div>
@@ -183,52 +220,62 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
   if (mode === 'join') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
+          {/* Language Toggle */}
+          <div className="flex justify-end">
+            <button
+              onClick={toggleLanguage}
+              className="px-3 py-1.5 text-xs sm:text-sm rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              {language === 'en' ? '中文' : 'EN'}
+            </button>
+          </div>
+
           {/* Header */}
           <div className="text-center">
-            <div className="text-6xl mb-4">📧</div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Join a Household
+            <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">📧</div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+              {t('Join a Household')}
             </h1>
-            <p className="text-gray-600 mb-6">
-              To join an existing household, you'll need an invitation.
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-6">
+              {t('To join an existing household, you\'ll need an invitation.')}
             </p>
           </div>
 
           {/* Instructions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-3">
-            <h3 className="font-semibold text-blue-900 flex items-center gap-2">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 sm:p-5 space-y-3">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2">
               <span>ℹ️</span>
-              <span>How to join:</span>
+              <span>{t('How to join:')}</span>
             </h3>
-            <ol className="space-y-2 text-sm text-blue-800">
+            <ol className="space-y-2 text-xs sm:text-sm text-blue-800 dark:text-blue-200">
               <li className="flex gap-2">
                 <span className="font-semibold">1.</span>
-                <span>Ask a household member to generate an invite link from their Household Settings</span>
+                <span>{t('Ask a household member to generate an invite link from their Household Settings')}</span>
               </li>
               <li className="flex gap-2">
                 <span className="font-semibold">2.</span>
-                <span>They'll share the invite link with you (via email, text, Slack, etc.)</span>
+                <span>{t('They\'ll share the invite link with you (via email, text, Slack, etc.)')}</span>
               </li>
               <li className="flex gap-2">
                 <span className="font-semibold">3.</span>
-                <span>Click the link to automatically join their household</span>
+                <span>{t('Click the link to automatically join their household')}</span>
               </li>
             </ol>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-            <p className="text-sm text-gray-700">
-              💡 <strong>Note:</strong> Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.
+          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">
+            <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+              💡 <strong>{t('Note:')}</strong> {t('Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.')}
             </p>
           </div>
 
           <button
             onClick={() => setMode('choice')}
-            className="w-full text-gray-600 hover:text-gray-800 font-medium py-2 transition-colors"
+            className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium py-2 transition-colors min-h-[44px] text-sm sm:text-base"
           >
-            ← Back to options
+            {t('← Back to options')}
           </button>
         </div>
       </div>
