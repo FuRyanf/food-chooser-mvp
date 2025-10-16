@@ -193,36 +193,72 @@ export class FoodChooserAPI {
     
     console.log('💾 Saving preferences for:', { userId: user.id, householdId, prefs })
     
-    const now = new Date().toISOString()
-    const prefsData: UserPreferencesInsert = {
-      ...prefs,
-      household_id: householdId,
-      user_id: user.id,
-      created_at: now,
-      updated_at: now
-    }
-
-    console.log('📤 Upserting data:', prefsData)
-
-    const { data, error } = await supabase!
+    // Check if preferences already exist for this household
+    const { data: existing } = await supabase!
       .from('user_preferences')
-      .upsert(prefsData, { onConflict: 'household_id' })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('❌ Error upserting user preferences:', {
-        error,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      })
-      throw new Error(`Failed to save preferences: ${error.message}`)
+      .select('*')
+      .eq('household_id', householdId)
+      .maybeSingle()
+    
+    const now = new Date().toISOString()
+    
+    if (existing) {
+      // Update existing preferences
+      console.log('📝 Updating existing preferences')
+      const { data, error } = await supabase!
+        .from('user_preferences')
+        .update({
+          ...prefs,
+          updated_at: now
+        })
+        .eq('household_id', householdId)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Error updating user preferences:', {
+          error,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(`Failed to save preferences: ${error.message}`)
+      }
+      
+      console.log('✅ Preferences updated successfully:', data)
+      return data
+    } else {
+      // Insert new preferences
+      console.log('➕ Inserting new preferences')
+      const prefsData: UserPreferencesInsert = {
+        ...prefs,
+        household_id: householdId,
+        user_id: user.id,
+        created_at: now,
+        updated_at: now
+      }
+      
+      const { data, error } = await supabase!
+        .from('user_preferences')
+        .insert(prefsData)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Error inserting user preferences:', {
+          error,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(`Failed to save preferences: ${error.message}`)
+      }
+      
+      console.log('✅ Preferences inserted successfully:', data)
+      return data
     }
-
-    console.log('✅ Preferences saved successfully:', data)
-    return data
   }
 
   // Cuisine Overrides
