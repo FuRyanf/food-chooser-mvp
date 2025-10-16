@@ -161,10 +161,54 @@ CREATE INDEX IF NOT EXISTS idx_household_invitations_token ON household_invitati
 CREATE INDEX IF NOT EXISTS idx_household_invitations_household ON household_invitations(household_id);
 
 -- ============================================
--- PART 6: HELPER FUNCTIONS FOR RLS
+-- PART 6: ROW LEVEL SECURITY (RLS)
 -- ============================================
 
--- Drop helper functions first (for idempotency)
+-- Enable RLS on all tables
+ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE groceries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cuisine_overrides ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disabled_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE households ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_invitations ENABLE ROW LEVEL SECURITY;
+
+-- Drop all existing policies first (MUST be before dropping functions)
+DROP POLICY IF EXISTS "Users can view meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can insert meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can update meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can delete meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can view groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can insert groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can update groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can delete groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can view preferences in their household" ON user_preferences;
+DROP POLICY IF EXISTS "Users can insert their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can update their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can delete their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can view overrides in their household" ON cuisine_overrides;
+DROP POLICY IF EXISTS "Users can manage overrides in their household" ON cuisine_overrides;
+DROP POLICY IF EXISTS "Users can view disabled items in their household" ON disabled_items;
+DROP POLICY IF EXISTS "Users can manage disabled items in their household" ON disabled_items;
+DROP POLICY IF EXISTS "Users can view their own household" ON households;
+DROP POLICY IF EXISTS "Users can update their own household" ON households;
+DROP POLICY IF EXISTS "Users can view members of their household" ON household_members;
+DROP POLICY IF EXISTS "Users can view all household members" ON household_members;
+DROP POLICY IF EXISTS "Users can insert themselves as members" ON household_members;
+DROP POLICY IF EXISTS "Owners can manage members" ON household_members;
+DROP POLICY IF EXISTS "Owners can update members" ON household_members;
+DROP POLICY IF EXISTS "Owners can delete members" ON household_members;
+DROP POLICY IF EXISTS "Users can update their own membership" ON household_members;
+DROP POLICY IF EXISTS "Users can delete their own membership" ON household_members;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view invitations for their household" ON household_invitations;
+DROP POLICY IF EXISTS "Owners can create invitations" ON household_invitations;
+
+-- Now drop helper functions (after policies are dropped)
 DROP FUNCTION IF EXISTS get_user_household_id();
 DROP FUNCTION IF EXISTS user_is_household_owner(UUID);
 
@@ -197,54 +241,6 @@ AS $$
     AND role = 'owner'
   );
 $$;
-
--- ============================================
--- PART 7: ROW LEVEL SECURITY (RLS)
--- ============================================
-
--- Enable RLS on all tables
-ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE groceries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cuisine_overrides ENABLE ROW LEVEL SECURITY;
-ALTER TABLE disabled_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE households ENABLE ROW LEVEL SECURITY;
-ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE household_invitations ENABLE ROW LEVEL SECURITY;
-
--- Drop all existing policies first (for idempotency)
-DROP POLICY IF EXISTS "Users can view meals in their household" ON meals;
-DROP POLICY IF EXISTS "Users can insert meals in their household" ON meals;
-DROP POLICY IF EXISTS "Users can update meals in their household" ON meals;
-DROP POLICY IF EXISTS "Users can delete meals in their household" ON meals;
-DROP POLICY IF EXISTS "Users can view groceries in their household" ON groceries;
-DROP POLICY IF EXISTS "Users can insert groceries in their household" ON groceries;
-DROP POLICY IF EXISTS "Users can update groceries in their household" ON groceries;
-DROP POLICY IF EXISTS "Users can delete groceries in their household" ON groceries;
-DROP POLICY IF EXISTS "Users can view preferences in their household" ON user_preferences;
-DROP POLICY IF EXISTS "Users can insert their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can update their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can delete their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can view overrides in their household" ON cuisine_overrides;
-DROP POLICY IF EXISTS "Users can manage overrides in their household" ON cuisine_overrides;
-DROP POLICY IF EXISTS "Users can view disabled items in their household" ON disabled_items;
-DROP POLICY IF EXISTS "Users can manage disabled items in their household" ON disabled_items;
-DROP POLICY IF EXISTS "Users can view their own household" ON households;
-DROP POLICY IF EXISTS "Users can update their own household" ON households;
-DROP POLICY IF EXISTS "Users can view members of their household" ON household_members;
-DROP POLICY IF EXISTS "Users can view all household members" ON household_members;
-DROP POLICY IF EXISTS "Users can insert themselves as members" ON household_members;
-DROP POLICY IF EXISTS "Owners can manage members" ON household_members;
-DROP POLICY IF EXISTS "Owners can update members" ON household_members;
-DROP POLICY IF EXISTS "Owners can delete members" ON household_members;
-DROP POLICY IF EXISTS "Users can update their own membership" ON household_members;
-DROP POLICY IF EXISTS "Users can delete their own membership" ON household_members;
-DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can view invitations for their household" ON household_invitations;
-DROP POLICY IF EXISTS "Owners can create invitations" ON household_invitations;
 
 -- RLS Policies for meals
 CREATE POLICY "Users can view meals in their household" ON meals
@@ -323,7 +319,7 @@ CREATE POLICY "Owners can create invitations" ON household_invitations
   FOR INSERT WITH CHECK (user_is_household_owner(household_id));
 
 -- ============================================
--- PART 8: TRIGGERS
+-- PART 7: TRIGGERS
 -- ============================================
 
 -- Trigger to auto-create household when user signs up
@@ -389,7 +385,7 @@ CREATE TRIGGER on_auth_user_created_profile
   EXECUTE FUNCTION public.handle_new_user_profile();
 
 -- ============================================
--- PART 9: RPC FUNCTIONS
+-- PART 8: RPC FUNCTIONS
 -- ============================================
 
 -- Drop all existing RPC functions first (for idempotency)
@@ -728,7 +724,7 @@ END;
 $$;
 
 -- ============================================
--- PART 10: GRANT PERMISSIONS
+-- PART 9: GRANT PERMISSIONS
 -- ============================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON meals TO authenticated;
