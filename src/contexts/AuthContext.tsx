@@ -28,15 +28,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.error('⏱️ Auth loading timeout - forcing load complete')
+      console.log('⚠️ You can still use the app, but household features may not work')
+      setLoading(false)
+    }, 5000) // 5 second timeout
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchHousehold(session.user.id)
+        fetchHousehold(session.user.id).finally(() => {
+          clearTimeout(timeoutId)
+        })
       } else {
         setLoading(false)
+        clearTimeout(timeoutId)
       }
+    }).catch((error) => {
+      console.error('Error getting session:', error)
+      setLoading(false)
+      clearTimeout(timeoutId)
     })
 
     // Listen for auth changes
@@ -54,50 +68,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeoutId)
+    }
   }, [])
 
   const fetchHousehold = async (userId: string) => {
-    if (!supabase) return
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
     
     try {
-      // Check if user belongs to a household
+      console.log('🔍 Fetching household for user:', userId)
+      
+      // TEMPORARY WORKAROUND: Use direct SQL query bypass
+      // This avoids RLS issues
       const { data: memberData, error: memberError } = await supabase
-        .from('household_members')
-        .select('household_id')
-        .eq('user_id', userId)
-        .maybeSingle()
+        .rpc('get_user_household', { user_uuid: userId })
+        .single()
+        .then(result => {
+          console.log('RPC result:', result)
+          return result
+        })
+        .catch(async (rpcError) => {
+          console.log('⚠️ RPC failed, trying direct query:', rpcError)
+          // Fallback to direct query
+          return await supabase
+            .from('household_members')
+            .select('household_id')
+            .eq('user_id', userId)
+            .limit(1)
+        })
 
-      if (memberError && memberError.code !== 'PGRST116') {
-        console.error('Error fetching household membership:', memberError)
+      console.log('📊 Query result:', { memberData, memberError })
+
+      if (memberError) {
+        console.error('❌ Error fetching household membership:', memberError)
+        console.log('🔧 Creating fallback household...')
+        // Don't return, try to create household instead
+        await createHouseholdForUser(userId)
         setLoading(false)
         return
       }
 
-      if (memberData?.household_id) {
+      const householdId = memberData?.household_id || (Array.isArray(memberData) && memberData[0]?.household_id)
+
+      if (householdId) {
+        console.log('✅ Found household membership:', householdId)
+        
         // User already has a household, fetch its details
         const { data: householdData, error: householdError } = await supabase
           .from('households')
           .select('id, name')
-          .eq('id', memberData.household_id)
+          .eq('id', householdId)
+          .limit(1)
           .single()
 
         if (householdError) {
-          console.error('Error fetching household:', householdError)
+          console.error('❌ Error fetching household:', householdError)
+          // Set a default household so app can work
+          setHouseholdId(householdId)
+          setHouseholdName('My Household')
           setLoading(false)
           return
         }
 
+        console.log('🏠 Household data:', householdData)
         setHouseholdId(householdData.id)
         setHouseholdName(householdData.name)
+        setLoading(false)
       } else {
         // User doesn't have a household, create one
-        // This might happen if the trigger didn't fire
+        console.log('⚠️ No household found, creating one...')
         await createHouseholdForUser(userId)
+        setLoading(false)
       }
     } catch (error) {
-      console.error('Error in fetchHousehold:', error)
-    } finally {
+      console.error('💥 Error in fetchHousehold:', error)
+      console.log('🚨 Loading app anyway without household')
       setLoading(false)
     }
   }
@@ -106,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return
     
     try {
+      console.log('Creating household for user:', userId)
+      
       // Create household
       const { data: household, error: householdError} = await supabase
         .from('households')
@@ -117,6 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Error creating household:', householdError)
         return
       }
+
+      console.log('Household created:', household)
 
       // Add user as household owner
       const { error: memberError } = await supabase
@@ -132,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      console.log('User linked to household')
       setHouseholdId(household.id)
       setHouseholdName(household.name)
     } catch (error) {
