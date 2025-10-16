@@ -19,11 +19,12 @@ A smart, fun meal recommendation app with **Gacha Egg** animations, budget track
 
 ### 👥 Household Accounts
 - **Google OAuth** - Secure one-click authentication
-- **Email Invites** - Invite members via email with secure time-limited links
+- **Simple Invite Codes** - Share 6-character codes (e.g., ABC123) with family/friends
+- **Reusable Codes** - One code works for multiple people, expires in 7 days
 - **Shared Data** - Multiple Google accounts share one household
-- **Person Tracking** - See who paid for what
-- **Member Management** - Add/remove household members
-- **Household Switching** - Seamlessly switch between households
+- **User Profiles** - Set your display name, auto-fills "Who paid?"
+- **Person Tracking** - See who paid for what with display names
+- **Member Management** - Leave households anytime
 - **Smart Cleanup** - Auto-delete empty households and data
 
 ### 🌡️ Contextual Recommendations
