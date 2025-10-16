@@ -9,6 +9,7 @@ import { Language, translateTemplate, translateText } from './lib/i18n';
 import crackedEggImg from '../image cracked egg.png';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { useAuth } from './contexts/AuthContext';
+import { useProfile } from './contexts/ProfileContext';
 import { HouseholdSettings } from './components/HouseholdSettings';
 import HouseholdOnboarding from './components/HouseholdOnboarding';
 import InviteAccept from './components/InviteAccept';
@@ -281,6 +282,7 @@ function AppRouter() {
 
 function MainApp() {
   const { householdId, user, signOut, householdName } = useAuth();
+  const { displayName } = useProfile();
   const [meals, setMeals] = useState<Meal[]>([]);
   // Saved preferences used by computation
   const [budgetSaved, setBudgetSaved] = useState<Budget>({ min: 10, max: 35 });
@@ -831,15 +833,28 @@ function MainApp() {
   const [rating, setRating] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
   const [seedFlag, setSeedFlag] = useState<boolean>(false);
-  const [mealPurchaserName, setMealPurchaserName] = useState<string>('');
-  const [groceryPurchaserName, setGroceryPurchaserName] = useState<string>('');
+  const [mealPurchaserName, setMealPurchaserName] = useState<string>(displayName || '');
+  const [groceryPurchaserName, setGroceryPurchaserName] = useState<string>(displayName || '');
   const [logTab, setLogTab] = useState<'meal'|'grocery'|'travel'>('meal');
   const [travelTag, setTravelTag] = useState<string>('');
   const [travelAmount, setTravelAmount] = useState<string>('100');
   const [travelDate, setTravelDate] = useState<string>(todayISO());
   const [travelNotes, setTravelNotes] = useState<string>('');
-  const [travelPurchaserName, setTravelPurchaserName] = useState<string>('');
+  const [travelPurchaserName, setTravelPurchaserName] = useState<string>(displayName || '');
   const [travelSaving, setTravelSaving] = useState<boolean>(false);
+
+  // Update purchaser names when displayName changes
+  useEffect(() => {
+    if (displayName && !mealPurchaserName) {
+      setMealPurchaserName(displayName);
+    }
+    if (displayName && !groceryPurchaserName) {
+      setGroceryPurchaserName(displayName);
+    }
+    if (displayName && !travelPurchaserName) {
+      setTravelPurchaserName(displayName);
+    }
+  }, [displayName]);
   // Contributions tab state
   const [contributionsDateRange, setContributionsDateRange] = useState<'mtd' | 'all' | 'custom'>('mtd');
   const [contributionsView, setContributionsView] = useState<'overview' | 'travelTags'>('overview');
@@ -875,7 +890,7 @@ function MainApp() {
       purchaser_name: mealPurchaserName.trim() || 'Unknown'
     };
     await addMeal(mealData);
-    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false); setMealPurchaserName('');
+    setDate(todayISO()); setRestaurant(''); setDish(''); setCuisineInput('Mexican'); setCost('15'); setRating(4); setNotes(''); setSeedFlag(false); setMealPurchaserName(displayName || '');
   }
 
   async function handleOrder(rec: Recommendation) {
@@ -1023,7 +1038,7 @@ function MainApp() {
         .sort((a, b) => +new Date(b.date) - +new Date(a.date))
       );
       setEditGrocery(null);
-      setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
+      setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName(displayName || '');
       setShowStoreDropdown(false);
       setSelectedStoreIndex(-1);
       showToast(t('Grocery trip updated'));
@@ -2305,7 +2320,7 @@ function MainApp() {
                   className="btn-ghost"
                   onClick={() => {
                     setEditGrocery(null);
-                    setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
+                    setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName(displayName || '');
                     setShowStoreDropdown(false);
                     setSelectedStoreIndex(-1);
                   }}
@@ -2330,7 +2345,7 @@ function MainApp() {
                   });
                   const latest = await FoodChooserAPI.getGroceries(householdId!);
                   setGroceries(latest);
-                  setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
+                  setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName(displayName || '');
                   showToast(t('Grocery trip saved'));
                 }}
               >
@@ -2393,7 +2408,7 @@ function MainApp() {
                     setGroceries(latest);
                     setTravelAmount('100');
                     setTravelTag('');
-                    setTravelPurchaserName('');
+                    setTravelPurchaserName(displayName || '');
                     setTravelNotes('');
                     showToast(t('Travel spend saved'));
                   } catch (err) {

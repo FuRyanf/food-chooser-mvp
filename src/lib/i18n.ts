@@ -251,6 +251,15 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Failed to create household': { zh: '建立家庭失敗' },
   'Your Name': { zh: '你的名字' },
   'e.g., Ryan, Sarah, etc.': { zh: '例如：小明、小華等' },
+  'Your Profile': { zh: '你的個人檔案' },
+  'Display Name': { zh: '顯示名稱' },
+  'This name will default as the "Who paid?" in your meal and grocery entries': { zh: '此名稱將預設為你的餐點和購物記錄中的「誰付款？」' },
+  'e.g., Ryan, Sarah': { zh: '例如：小明、小華' },
+  'Update Name': { zh: '更新名稱' },
+  'Saving...': { zh: '儲存中...' },
+  'Profile updated successfully!': { zh: '個人檔案更新成功！' },
+  'Please enter a name': { zh: '請輸入名稱' },
+  'Failed to update profile': { zh: '更新個人檔案失敗' },
 };
 
 export function translateText(text: string, language: Language): string {

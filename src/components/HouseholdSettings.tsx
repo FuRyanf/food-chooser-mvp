@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useProfile } from '../contexts/ProfileContext'
 import { supabase } from '../lib/supabase'
-import { Users, Crown, Trash2, Mail, Send, Clock, CheckCircle, XCircle, LogOut, AlertCircle } from 'lucide-react'
+import { Users, Crown, Trash2, Mail, Send, Clock, CheckCircle, XCircle, LogOut, AlertCircle, User } from 'lucide-react'
 
 interface HouseholdMember {
   id: string
@@ -24,13 +25,17 @@ interface Invitation {
 
 export function HouseholdSettings() {
   const { householdId, householdName, user, refreshHousehold, signOut } = useAuth()
+  const { displayName, updateDisplayName, loading: profileLoading } = useProfile()
   const [members, setMembers] = useState<HouseholdMember[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [newHouseholdName, setNewHouseholdName] = useState('')
+  const [newDisplayName, setNewDisplayName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
 
   useEffect(() => {
@@ -40,6 +45,12 @@ export function HouseholdSettings() {
       setNewHouseholdName(householdName || '')
     }
   }, [householdId, householdName])
+
+  useEffect(() => {
+    if (displayName && !newDisplayName) {
+      setNewDisplayName(displayName)
+    }
+  }, [displayName])
 
   const fetchMembers = async () => {
     if (!householdId || !supabase) return
@@ -249,6 +260,28 @@ export function HouseholdSettings() {
     setTimeout(() => setSuccess(null), 3000)
   }
 
+  const handleUpdateProfile = async () => {
+    if (!newDisplayName.trim()) {
+      setProfileError('Please enter a name')
+      return
+    }
+
+    setLoading(true)
+    setProfileError(null)
+    setProfileSuccess(null)
+
+    try {
+      await updateDisplayName(newDisplayName.trim())
+      setProfileSuccess('Profile updated successfully!')
+      setTimeout(() => setProfileSuccess(null), 3000)
+    } catch (err: any) {
+      console.error('Error updating profile:', err)
+      setProfileError(err.message || 'Failed to update profile')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const currentUserRole = members.find(m => m.user_id === user?.id)?.role
   const isOwner = currentUserRole === 'owner'
   const isLastMember = members.length === 1
@@ -280,6 +313,50 @@ export function HouseholdSettings() {
           </div>
         </div>
       )}
+
+      {/* Profile Settings */}
+      <div className="bg-white dark:bg-zinc-900 p-4 sm:p-6 rounded-lg shadow border-l-4 border-orange-500">
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+          <User className="w-4 h-4 sm:w-5 sm:h-5" />
+          Your Profile
+        </h3>
+        
+        {profileError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-xs sm:text-sm mb-3">
+            {profileError}
+          </div>
+        )}
+
+        {profileSuccess && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg text-xs sm:text-sm mb-3">
+            {profileSuccess}
+          </div>
+        )}
+
+        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+          Display Name
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          This name will default as the "Who paid?" in your meal and grocery entries
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            value={newDisplayName}
+            onChange={(e) => setNewDisplayName(e.target.value)}
+            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
+            placeholder="e.g., Ryan, Sarah"
+            disabled={loading || profileLoading}
+          />
+          <button
+            onClick={handleUpdateProfile}
+            disabled={loading || profileLoading || newDisplayName === displayName || !newDisplayName.trim()}
+            className="px-4 sm:px-6 py-2.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 active:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-h-[44px]"
+          >
+            {loading ? 'Saving...' : 'Update Name'}
+          </button>
+        </div>
+      </div>
 
       {/* Household Name */}
       <div className="bg-white dark:bg-zinc-900 p-4 sm:p-6 rounded-lg shadow">
