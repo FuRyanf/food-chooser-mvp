@@ -96,13 +96,30 @@ function mapWeatherCodeToCondition(code: number, tempF: number): Weather['condit
   return 'mild';
 }
 async function fetchWeather(lat:number, lon:number): Promise<Weather>{
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`;
-  const res = await fetch(url);
-  const data = await res.json();
-  const t = Number(data?.current_weather?.temperature ?? 70);
-  const code = Number(data?.current_weather?.weathercode ?? 0);
-  const condition = mapWeatherCodeToCondition(code, t);
-  return { condition, tempF: t };
+  try {
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      console.warn('Weather API returned non-OK status:', res.status);
+      throw new Error('Weather API failed');
+    }
+    
+    const data = await res.json();
+    const t = Number(data?.current_weather?.temperature ?? 70);
+    const code = Number(data?.current_weather?.weathercode ?? 0);
+    const condition = mapWeatherCodeToCondition(code, t);
+    return { condition, tempF: t };
+  } catch (err) {
+    console.log('Weather API unavailable, using defaults');
+    // Return default mild weather
+    return { condition: 'mild', tempF: 70 };
+  }
 }
 async function reverseGeocode(lat:number, lon:number): Promise<string | null> {
   try {
@@ -574,12 +591,16 @@ function MainApp() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos)=>{
-          try { const w = await fetchWeather(pos.coords.latitude, pos.coords.longitude); setWx(w); } 
-          catch { fallback(); }
+          // Fetch weather (has its own timeout and fallback now)
+          const w = await fetchWeather(pos.coords.latitude, pos.coords.longitude);
+          setWx(w);
+          
+          // Try to get location name (non-blocking)
           try {
             const name = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-            if (name) setLocationName(name);
-            else {
+            if (name) {
+              setLocationName(name);
+            } else {
               const ipCity = await ipCityFallback();
               setLocationName(ipCity ?? 'City unavailable');
             }
@@ -589,7 +610,7 @@ function MainApp() {
           }
         },
         ()=> fallback(),
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       );
     } else { fallback(); }
   }, []);
