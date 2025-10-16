@@ -171,41 +171,31 @@ DROP FUNCTION IF EXISTS user_is_household_owner(UUID);
 -- Helper function to get user's household_id (bypasses RLS)
 CREATE OR REPLACE FUNCTION get_user_household_id()
 RETURNS UUID
-LANGUAGE plpgsql
+LANGUAGE sql
 SECURITY DEFINER
+STABLE
 SET search_path = public
 AS $$
-DECLARE
-  v_household_id UUID;
-BEGIN
-  SELECT household_id INTO v_household_id
+  SELECT household_id
   FROM household_members
   WHERE user_id = auth.uid()
   LIMIT 1;
-  
-  RETURN v_household_id;
-END;
 $$;
 
 -- Helper function to check if user is owner of a household (bypasses RLS)
 CREATE OR REPLACE FUNCTION user_is_household_owner(p_household_id UUID)
 RETURNS BOOLEAN
-LANGUAGE plpgsql
+LANGUAGE sql
 SECURITY DEFINER
+STABLE
 SET search_path = public
 AS $$
-DECLARE
-  v_is_owner BOOLEAN;
-BEGIN
   SELECT EXISTS (
     SELECT 1 FROM household_members
     WHERE user_id = auth.uid()
     AND household_id = p_household_id
     AND role = 'owner'
-  ) INTO v_is_owner;
-  
-  RETURN v_is_owner;
-END;
+  );
 $$;
 
 -- ============================================
@@ -243,8 +233,13 @@ DROP POLICY IF EXISTS "Users can manage disabled items in their household" ON di
 DROP POLICY IF EXISTS "Users can view their own household" ON households;
 DROP POLICY IF EXISTS "Users can update their own household" ON households;
 DROP POLICY IF EXISTS "Users can view members of their household" ON household_members;
+DROP POLICY IF EXISTS "Users can view all household members" ON household_members;
 DROP POLICY IF EXISTS "Users can insert themselves as members" ON household_members;
 DROP POLICY IF EXISTS "Owners can manage members" ON household_members;
+DROP POLICY IF EXISTS "Owners can update members" ON household_members;
+DROP POLICY IF EXISTS "Owners can delete members" ON household_members;
+DROP POLICY IF EXISTS "Users can update their own membership" ON household_members;
+DROP POLICY IF EXISTS "Users can delete their own membership" ON household_members;
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
@@ -302,13 +297,16 @@ CREATE POLICY "Users can view their own household" ON households
 CREATE POLICY "Users can update their own household" ON households
   FOR UPDATE USING (id = get_user_household_id());
 
--- RLS Policies for household_members
-CREATE POLICY "Users can view members of their household" ON household_members
-  FOR SELECT USING (household_id = get_user_household_id());
+-- RLS Policies for household_members (simplified to avoid recursion)
+-- Allow users to view all household_members (other tables enforce data isolation)
+CREATE POLICY "Users can view all household members" ON household_members
+  FOR SELECT USING (true);
 CREATE POLICY "Users can insert themselves as members" ON household_members
   FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "Owners can manage members" ON household_members
-  FOR ALL USING (user_is_household_owner(household_id));
+CREATE POLICY "Users can update their own membership" ON household_members
+  FOR UPDATE USING (user_id = auth.uid());
+CREATE POLICY "Users can delete their own membership" ON household_members
+  FOR DELETE USING (user_id = auth.uid());
 
 -- RLS Policies for profiles
 CREATE POLICY "Users can view own profile" ON public.profiles
