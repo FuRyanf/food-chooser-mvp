@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/egggacha.tsx","./src/components/spendingsummary.tsx","./src/lib/api.ts","./src/lib/i18n.ts","./src/lib/supabase.ts"],"version":"5.9.2"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/authenticatedapp.tsx","./src/components/egggacha.tsx","./src/components/householdsettings.tsx","./src/components/login.tsx","./src/components/spendingsummary.tsx","./src/contexts/authcontext.tsx","./src/lib/api.ts","./src/lib/i18n.ts","./src/lib/supabase.ts"],"version":"5.9.2"}

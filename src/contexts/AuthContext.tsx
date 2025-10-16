@@ -85,22 +85,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // TEMPORARY WORKAROUND: Use direct SQL query bypass
       // This avoids RLS issues
-      const { data: memberData, error: memberError } = await supabase
-        .rpc('get_user_household', { user_uuid: userId })
-        .single()
-        .then(result => {
-          console.log('RPC result:', result)
-          return result
-        })
-        .catch(async (rpcError) => {
-          console.log('⚠️ RPC failed, trying direct query:', rpcError)
+      let memberData: any = null
+      let memberError: any = null
+      
+      try {
+        const rpcResult = await supabase
+          .rpc('get_user_household', { user_uuid: userId })
+          .single()
+        
+        console.log('RPC result:', rpcResult)
+        
+        if (rpcResult.error) {
+          console.log('⚠️ RPC failed, trying direct query:', rpcResult.error)
           // Fallback to direct query
-          return await supabase
+          const fallbackResult = await supabase!
             .from('household_members')
             .select('household_id')
             .eq('user_id', userId)
             .limit(1)
-        })
+          
+          memberData = fallbackResult.data
+          memberError = fallbackResult.error
+        } else {
+          memberData = rpcResult.data
+          memberError = rpcResult.error
+        }
+      } catch (err) {
+        console.error('⚠️ Query exception:', err)
+        memberError = err
+      }
 
       console.log('📊 Query result:', { memberData, memberError })
 
