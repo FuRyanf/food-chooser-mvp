@@ -85,39 +85,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🔍 Fetching household for user:', userId)
       
-      // TEMPORARY WORKAROUND: Use direct SQL query bypass
-      // This avoids RLS issues
+      // Try direct query first (most reliable)
       let memberData: any = null
       let memberError: any = null
       
       try {
-        const rpcResult = await supabase
-          .rpc('get_user_household', { user_uuid: userId })
-          .single()
+        console.log('🔍 Querying household_members directly for user:', userId)
         
-        console.log('RPC result:', rpcResult)
+        const directResult = await supabase
+          .from('household_members')
+          .select('household_id')
+          .eq('user_id', userId)
+          .maybeSingle()
         
-        if (rpcResult.error) {
-          console.log('⚠️ RPC failed, trying direct query:', rpcResult.error)
-          // Fallback to direct query
-          const fallbackResult = await supabase!
-            .from('household_members')
-            .select('household_id')
-            .eq('user_id', userId)
-            .limit(1)
+        console.log('📊 Direct query result:', directResult)
+        
+        memberData = directResult.data
+        memberError = directResult.error
+        
+        // If direct query fails, try RPC as fallback
+        if (memberError || !memberData) {
+          console.log('⚠️ Direct query failed, trying RPC fallback')
+          const rpcResult = await supabase
+            .rpc('get_user_household', { user_uuid: userId })
+            .maybeSingle()
           
-          memberData = fallbackResult.data
-          memberError = fallbackResult.error
-        } else {
-          memberData = rpcResult.data
-          memberError = rpcResult.error
+          console.log('RPC fallback result:', rpcResult)
+          
+          if (!rpcResult.error && rpcResult.data) {
+            memberData = rpcResult.data
+            memberError = null
+          }
         }
       } catch (err) {
         console.error('⚠️ Query exception:', err)
         memberError = err
       }
 
-      console.log('📊 Query result:', { memberData, memberError })
+      console.log('✅ Final query result:', { memberData, memberError, userId })
 
       if (memberError) {
         console.error('❌ Error fetching household membership:', memberError)

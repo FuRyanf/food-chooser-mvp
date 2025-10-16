@@ -20,7 +20,7 @@ interface InviteInfo {
 }
 
 export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptProps) {
-  const { user, householdId } = useAuth()
+  const { user, householdId, loading: authLoading } = useAuth()
   const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [accepting, setAccepting] = useState(false)
@@ -31,6 +31,16 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
   useEffect(() => {
     fetchInviteInfo()
   }, [inviteToken])
+
+  useEffect(() => {
+    // Log auth state for debugging
+    console.log('📊 InviteAccept auth state:', { 
+      user: user?.id, 
+      householdId, 
+      authLoading,
+      inviteToken 
+    })
+  }, [user, householdId, authLoading])
 
   const fetchInviteInfo = async () => {
     if (!supabase) {
@@ -67,8 +77,11 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
       return
     }
 
+    console.log('🔄 Accepting invite - user state:', { userId: user.id, householdId, showSwitchConfirm })
+
     // If user is already in a household, show confirmation
     if (householdId && !showSwitchConfirm) {
+      console.log('⚠️ User already has household, showing switch confirmation')
       setShowSwitchConfirm(true)
       return
     }
@@ -104,13 +117,15 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
     }
   }
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <div className="flex flex-col items-center gap-4">
             <Loader className="w-12 h-12 text-blue-500 animate-spin" />
-            <p className="text-gray-600">Loading invitation...</p>
+            <p className="text-gray-600">
+              {authLoading ? 'Loading your account...' : 'Loading invitation...'}
+            </p>
           </div>
         </div>
       </div>
