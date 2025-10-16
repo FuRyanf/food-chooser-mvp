@@ -45,24 +45,34 @@ export function HouseholdSettings() {
     if (!householdId || !supabase) return
 
     try {
+      // Use RPC function to get members with their email addresses
       const { data, error } = await supabase
-        .from('household_members')
-        .select('id, user_id, role, joined_at')
-        .eq('household_id', householdId)
-        .order('joined_at', { ascending: true })
+        .rpc('get_household_members_with_emails', { p_household_id: householdId })
 
       if (error) throw error
 
-      // For now, just use user_id slice as email
-      // In production, you'd want to fetch actual emails from auth.users
-      const membersWithEmails = (data || []).map(member => ({
-        ...member,
-        email: `User ${member.user_id.slice(0, 8)}...`
-      }))
-
-      setMembers(membersWithEmails)
+      setMembers(data || [])
     } catch (err) {
       console.error('Error fetching members:', err)
+      // Fallback to basic query if RPC fails
+      try {
+        const { data, error } = await supabase
+          .from('household_members')
+          .select('id, user_id, role, joined_at')
+          .eq('household_id', householdId)
+          .order('joined_at', { ascending: true })
+
+        if (error) throw error
+
+        const membersWithFallback = (data || []).map(member => ({
+          ...member,
+          email: `User ${member.user_id.slice(0, 8)}...`
+        }))
+
+        setMembers(membersWithFallback)
+      } catch (fallbackErr) {
+        console.error('Fallback query also failed:', fallbackErr)
+      }
     }
   }
 
