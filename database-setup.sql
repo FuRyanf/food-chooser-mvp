@@ -175,6 +175,34 @@ ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_invitations ENABLE ROW LEVEL SECURITY;
 
+-- Drop all existing policies first (for idempotency)
+DROP POLICY IF EXISTS "Users can view meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can insert meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can update meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can delete meals in their household" ON meals;
+DROP POLICY IF EXISTS "Users can view groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can insert groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can update groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can delete groceries in their household" ON groceries;
+DROP POLICY IF EXISTS "Users can view preferences in their household" ON user_preferences;
+DROP POLICY IF EXISTS "Users can insert their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can update their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can delete their own preferences" ON user_preferences;
+DROP POLICY IF EXISTS "Users can view overrides in their household" ON cuisine_overrides;
+DROP POLICY IF EXISTS "Users can manage overrides in their household" ON cuisine_overrides;
+DROP POLICY IF EXISTS "Users can view disabled items in their household" ON disabled_items;
+DROP POLICY IF EXISTS "Users can manage disabled items in their household" ON disabled_items;
+DROP POLICY IF EXISTS "Users can view their own household" ON households;
+DROP POLICY IF EXISTS "Users can update their own household" ON households;
+DROP POLICY IF EXISTS "Users can view members of their household" ON household_members;
+DROP POLICY IF EXISTS "Users can insert themselves as members" ON household_members;
+DROP POLICY IF EXISTS "Owners can manage members" ON household_members;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view invitations for their household" ON household_invitations;
+DROP POLICY IF EXISTS "Owners can create invitations" ON household_invitations;
+
 -- RLS Policies for meals
 CREATE POLICY "Users can view meals in their household" ON meals
   FOR SELECT USING (
