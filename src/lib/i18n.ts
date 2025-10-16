@@ -246,8 +246,11 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.': { zh: '邀請連結在 7 天後過期，且只能使用一次。系統不會自動發送電子郵件，連結須手動分享。' },
   '← Back to options': { zh: '← 返回選項' },
   'Please enter a household name': { zh: '請輸入家庭名稱' },
+  'Please enter your name': { zh: '請輸入你的名字' },
   'Database connection not available': { zh: '資料庫連線無法使用' },
   'Failed to create household': { zh: '建立家庭失敗' },
+  'Your Name': { zh: '你的名字' },
+  'e.g., Ryan, Sarah, etc.': { zh: '例如：小明、小華等' },
 };
 
 export function translateText(text: string, language: Language): string {

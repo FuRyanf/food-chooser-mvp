@@ -17,6 +17,7 @@ function resolveInitialLanguage(): Language {
 export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnboardingProps) {
   const [mode, setMode] = useState<'choice' | 'create' | 'join'>('choice')
   const [householdName, setHouseholdName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [language, setLanguage] = useState<Language>(() => resolveInitialLanguage())
@@ -35,6 +36,11 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
       return
     }
 
+    if (!displayName.trim()) {
+      setError(t('Please enter your name'))
+      return
+    }
+
     if (!supabase) {
       setError(t('Database connection not available'))
       return
@@ -44,6 +50,17 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
     setError('')
 
     try {
+      // Create/update profile with display name
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          display_name: displayName.trim(),
+          updated_at: new Date().toISOString()
+        })
+
+      if (profileError) throw profileError
+
       // Create household
       const { data: household, error: householdError } = await supabase
         .from('households')
@@ -178,6 +195,21 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
           <div className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('Your Name')}
+              </label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={t('e.g., Ryan, Sarah, etc.')}
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {t('Household Name')}
               </label>
               <input
@@ -187,7 +219,6 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
                 placeholder={t('e.g., The Smith Family, Roommates, etc.')}
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
                 disabled={loading}
-                autoFocus
               />
             </div>
 
@@ -199,7 +230,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
             <button
               onClick={handleCreateHousehold}
-              disabled={loading || !householdName.trim()}
+              disabled={loading || !householdName.trim() || !displayName.trim()}
               className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-2.5 sm:py-3 px-5 sm:px-6 rounded-lg transition-colors min-h-[44px] text-sm sm:text-base"
             >
               {loading ? t('Creating...') : t('Create Household')}
