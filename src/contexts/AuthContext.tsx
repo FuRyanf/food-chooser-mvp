@@ -35,36 +35,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('⏱️ Auth loading timeout - forcing load complete')
       console.log('⚠️ You can still use the app, but household features may not work')
       setLoading(false)
-    }, 5000) // 5 second timeout
+    }, 8000) // 8 second timeout (increased for slower connections)
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔐 Initial session check:', session ? 'Found' : 'Not found')
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        console.log('👤 User authenticated:', session.user.email)
         fetchHousehold(session.user.id).finally(() => {
           clearTimeout(timeoutId)
         })
       } else {
+        console.log('👤 No authenticated user')
         setLoading(false)
         clearTimeout(timeoutId)
       }
     }).catch((error) => {
-      console.error('Error getting session:', error)
+      console.error('❌ Error getting session:', error)
       setLoading(false)
       clearTimeout(timeoutId)
     })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log('🔄 Auth state changed:', event, session?.user?.email ?? 'No user')
+        
+        // Handle sign-in events with extra logging
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('✅ User signed in successfully:', session.user.email)
+        }
+        
+        // Handle sign-out events
+        if (event === 'SIGNED_OUT') {
+          console.log('👋 User signed out')
+        }
+        
         setSession(session)
         setUser(session?.user ?? null)
+        
         if (session?.user) {
           await fetchHousehold(session.user.id)
         } else {
           setHouseholdId(null)
           setHouseholdName(null)
+          setNeedsOnboarding(false)
           setLoading(false)
         }
       }
@@ -76,21 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const fetchHousehold = async (userId: string) => {
+  const fetchHousehold = async (userId: string, retryCount = 0) => {
     if (!supabase) {
       setLoading(false)
       return
     }
     
+    const maxRetries = 2
+    
     try {
-      console.log('🔍 Fetching household for user:', userId)
+      console.log(`🔍 Fetching household for user: ${userId} (attempt ${retryCount + 1}/${maxRetries + 1})`)
       
       // Try direct query first (most reliable)
       let memberData: any = null
       let memberError: any = null
       
       try {
-        console.log('🔍 Querying household_members directly for user:', userId)
+        console.log('🔍 Querying household_members directly...')
         
         const directResult = await supabase
           .from('household_members')
@@ -98,19 +117,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('user_id', userId)
           .maybeSingle()
         
-        console.log('📊 Direct query result:', directResult)
-        
         memberData = directResult.data
         memberError = directResult.error
         
-        // If direct query fails, try RPC as fallback
-        if (memberError || !memberData) {
-          console.log('⚠️ Direct query failed, trying RPC fallback')
+        console.log('📊 Direct query result:', { 
+          found: !!memberData, 
+          error: memberError?.message || 'none' 
+        })
+        
+        // If direct query fails, try RPC as fallback (but not for "not found")
+        if (memberError && memberError.code !== 'PGRST116' || !memberData) {
+          console.log('⚠️ Direct query needs fallback, trying RPC...')
           const rpcResult = await supabase
             .rpc('get_user_household', { user_uuid: userId })
             .maybeSingle()
           
-          console.log('RPC fallback result:', rpcResult)
+          console.log('📊 RPC result:', { found: !!rpcResult.data, error: rpcResult.error?.message || 'none' })
           
           if (!rpcResult.error && rpcResult.data) {
             memberData = rpcResult.data
@@ -118,24 +140,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.error('⚠️ Query exception:', err)
+        console.error('💥 Query exception:', err)
         memberError = err
-      }
-
-      console.log('✅ Final query result:', { memberData, memberError, userId })
-
-      if (memberError) {
-        console.error('❌ Error fetching household membership:', memberError)
-        console.log('⚠️ Query failed, user may need onboarding')
-        setNeedsOnboarding(true)
-        setLoading(false)
-        return
+        
+        // Retry if we have attempts left
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Retrying in 1 second... (${retryCount + 1}/${maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          return fetchHousehold(userId, retryCount + 1)
+        }
       }
 
       const householdId = memberData?.household_id || (Array.isArray(memberData) && memberData[0]?.household_id)
 
       if (householdId) {
-        console.log('✅ Found household membership:', householdId)
+        console.log('✅ Found household ID:', householdId)
         
         // User already has a household, fetch its details
         const { data: householdData, error: householdError } = await supabase
@@ -146,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single()
 
         if (householdError) {
-          console.error('❌ Error fetching household:', householdError)
+          console.error('❌ Error fetching household details:', householdError)
           // Set a default household so app can work
           setHouseholdId(householdId)
           setHouseholdName('My Household')
@@ -155,20 +174,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        console.log('🏠 Household data:', householdData)
+        console.log('✅ Household loaded:', householdData.name)
         setHouseholdId(householdData.id)
         setHouseholdName(householdData.name)
         setNeedsOnboarding(false)
         setLoading(false)
       } else {
         // User doesn't have a household - show onboarding
-        console.log('⚠️ No household found, user needs onboarding')
+        console.log('ℹ️ No household found, showing onboarding flow')
+        setHouseholdId(null)
+        setHouseholdName(null)
         setNeedsOnboarding(true)
         setLoading(false)
       }
     } catch (error) {
-      console.error('💥 Error in fetchHousehold:', error)
-      console.log('🚨 Loading app anyway without household')
+      console.error('💥 Unexpected error in fetchHousehold:', error)
+      
+      // Retry on unexpected errors
+      if (retryCount < maxRetries) {
+        console.log(`🔄 Retrying after unexpected error... (${retryCount + 1}/${maxRetries})`)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return fetchHousehold(userId, retryCount + 1)
+      }
+      
+      console.log('🚨 All retries exhausted, proceeding with onboarding')
+      setNeedsOnboarding(true)
       setLoading(false)
     }
   }
@@ -184,18 +214,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return
     
     try {
+      // Get the current path to redirect back after auth
+      const currentPath = window.location.pathname + window.location.search
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}`
+          redirectTo: `${window.location.origin}${currentPath}`,
+          skipBrowserRedirect: false,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       })
       if (error) {
-        console.error('Error signing in with Google:', error)
+        console.error('❌ Error signing in with Google:', error)
         throw error
       }
     } catch (error) {
-      console.error('Sign in error:', error)
+      console.error('❌ Sign in error:', error)
       throw error
     }
   }

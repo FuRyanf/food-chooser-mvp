@@ -169,22 +169,22 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
         <motion.div
-          className="w-full max-w-4xl"
+          className="w-full max-w-4xl my-auto"
           onClick={(e) => e.stopPropagation()}
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 30, opacity: 0 }}
         >
-          <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
             <div
-              className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br from-zinc-100 via-zinc-50 to-white transition-shadow duration-500 dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900 ${
+              className={`relative overflow-hidden rounded-2xl sm:rounded-3xl border bg-gradient-to-br from-zinc-100 via-zinc-50 to-white transition-shadow duration-500 dark:border-zinc-800 dark:from-zinc-900 dark:via-zinc-900/60 dark:to-zinc-900 min-h-[280px] sm:min-h-[360px] ${
                 crackedBackdrop ? "border-amber-200/80 shadow-[0_0_30px_rgba(250,204,21,0.35)]" : "border-zinc-200"
               }`}
             >
@@ -308,43 +308,43 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
               )}
             </div>
 
-            <div className="flex min-h-[360px] flex-col justify-center">
+            <div className="flex min-h-[280px] sm:min-h-[360px] flex-col justify-center">
               <AnimatePresence mode="wait">
                 {phase === "reveal" ? (
                   <motion.div
                     key="reveal"
-                    className="card border border-amber-200/70 bg-white/80 p-5 shadow-xl dark:border-amber-400/30 dark:bg-zinc-900/80"
+                    className="card border border-amber-200/70 bg-white/80 p-4 sm:p-5 shadow-xl dark:border-amber-400/30 dark:bg-zinc-900/80"
                     initial={{ opacity: 0, x: 40 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 40 }}
                   >
-                    <div className="mb-3 flex items-center gap-2 text-lg font-semibold text-amber-600 dark:text-amber-200">
-                      <EggIcon className="h-5 w-5" /> {translate('Your Mystery Pick')}
+                    <div className="mb-3 flex items-center gap-2 text-base sm:text-lg font-semibold text-amber-600 dark:text-amber-200">
+                      <EggIcon className="h-4 w-4 sm:h-5 sm:w-5" /> {translate('Your Mystery Pick')}
                     </div>
                     {pick ? (
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full border border-amber-300/70 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-300/30 dark:text-amber-200">{pick.tier}</span>
                           <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">{pick.label}</span>
                         </div>
                         <div className="rounded-xl border border-zinc-200 bg-white/70 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/70">
                           <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{translate('Suggested')}</div>
-                          <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                          <div className="mt-1 text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100">
                             {pick.suggestedRestaurant ?? translate("Chef's Choice")}
                           </div>
-                          <div className="text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? translate('Signature dish')}</div>
+                          <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300">{pick.dish ?? translate('Signature dish')}</div>
                           {tierFlavor && (
                             <p className="mt-2 text-xs text-amber-700/80 dark:text-amber-200/80">{tierFlavor}</p>
                           )}
-                          <div className="mt-2 flex items-center gap-1 text-sm text-zinc-700 dark:text-zinc-200">
-                            <DollarSign className="h-4 w-4" />
+                          <div className="mt-2 flex items-center gap-1 text-xs sm:text-sm text-zinc-700 dark:text-zinc-200">
+                            <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             {translate('Est.')} ${pick.estCost.toFixed(2)}
                           </div>
                         </div>
-                        <div className="flex justify-end gap-2">
-                          <button className="btn-outline" onClick={onClose}>{translate('Keep browsing')}</button>
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                          <button className="btn-outline text-sm" onClick={onClose}>{translate('Keep browsing')}</button>
                           <button
-                            className="btn-primary"
+                            className="btn-primary text-sm"
                             onClick={() => {
                               if (pick && onOrder) onOrder(pick);
                               onClose();
@@ -355,18 +355,18 @@ export default function EggGacha({ open, pick, onClose, onOrder, confirmLabel, t
                         </div>
                       </div>
                     ) : (
-                      <div>{translate('No pick available.')}</div>
+                      <div className="text-sm">{translate('No pick available.')}</div>
                     )}
                   </motion.div>
                 ) : (
                   <motion.div
                     key="loading"
-                    className="card border border-zinc-200/80 bg-white/70 p-5 text-center text-sm text-zinc-600 shadow dark:border-zinc-700/70 dark:bg-zinc-900/70 dark:text-zinc-300"
+                    className="card border border-zinc-200/80 bg-white/70 p-4 sm:p-5 text-center text-xs sm:text-sm text-zinc-600 shadow dark:border-zinc-700/70 dark:bg-zinc-900/70 dark:text-zinc-300"
                     initial={{ opacity: 0, x: 40 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 40 }}
                   >
-                    <div className="mb-2 text-base font-semibold text-zinc-800 dark:text-zinc-100">{translate('Hold tight...')}</div>
+                    <div className="mb-2 text-sm sm:text-base font-semibold text-zinc-800 dark:text-zinc-100">{translate('Hold tight...')}</div>
                     <p>{loadingMessage}</p>
                   </motion.div>
                 )}
