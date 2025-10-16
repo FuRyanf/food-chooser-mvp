@@ -60,14 +60,14 @@ npm install
 #### B. Run Database Setup
 1. Go to Supabase Dashboard → **SQL Editor**
 2. Create a **New Query**
-3. Copy the contents of `database-setup-complete.sql`
+3. Copy the contents of `database-setup.sql`
 4. Click **Run** to execute
 
-This creates:
-- ✅ All tables (meals, groceries, preferences, etc.)
-- ✅ Household authentication system
-- ✅ Auto-household creation trigger
-- ✅ Helper functions
+This single file creates:
+- ✅ All tables (meals, groceries, households, profiles, invites)
+- ✅ RLS policies for security
+- ✅ Auto-setup triggers (household + profile creation)
+- ✅ RPC functions (invites, household management)
 
 #### C. Configure Environment Variables
 ```bash
