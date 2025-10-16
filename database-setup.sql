@@ -372,6 +372,15 @@ CREATE TRIGGER on_auth_user_created_profile
 -- PART 8: RPC FUNCTIONS
 -- ============================================
 
+-- Drop all existing functions first (for idempotency)
+DROP FUNCTION IF EXISTS get_user_household(UUID);
+DROP FUNCTION IF EXISTS get_household_members_with_emails(UUID);
+DROP FUNCTION IF EXISTS generate_household_invite(UUID);
+DROP FUNCTION IF EXISTS accept_household_invite(TEXT);
+DROP FUNCTION IF EXISTS get_invite_info(TEXT);
+DROP FUNCTION IF EXISTS get_household_invites(UUID);
+DROP FUNCTION IF EXISTS leave_household();
+
 -- Function to get user's household
 CREATE OR REPLACE FUNCTION get_user_household(p_user_id UUID)
 RETURNS TABLE (household_id UUID, household_name TEXT, role TEXT)
