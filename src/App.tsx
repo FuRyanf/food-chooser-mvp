@@ -10,6 +10,8 @@ import crackedEggImg from '../image cracked egg.png';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { useAuth } from './contexts/AuthContext';
 import { HouseholdSettings } from './components/HouseholdSettings';
+import HouseholdOnboarding from './components/HouseholdOnboarding';
+import InviteAccept from './components/InviteAccept';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type MealInsert = Database['public']['Tables']['meals']['Insert'];
@@ -206,11 +208,58 @@ function computeMealScoreBreakdown(meal: Meal, budget: Budget, today: Weather) {
 }
 
 export default function App() {
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check if this is an invite link
+    const path = window.location.pathname;
+    const match = path.match(/^\/invite\/([a-zA-Z0-9_-]+)$/);
+    if (match) {
+      setInviteToken(match[1]);
+    }
+  }, []);
+
+  // If there's an invite token in the URL, show InviteAccept
+  if (inviteToken) {
+    return (
+      <AuthenticatedApp>
+        <InviteAccept 
+          inviteToken={inviteToken} 
+          onAccepted={() => {
+            // Clear invite token and redirect to home
+            setInviteToken(null);
+            window.history.pushState({}, '', '/');
+            window.location.reload();
+          }} 
+        />
+      </AuthenticatedApp>
+    );
+  }
+
   return (
     <AuthenticatedApp>
-      <MainApp />
+      <AppRouter />
     </AuthenticatedApp>
   );
+}
+
+function AppRouter() {
+  const { user, needsOnboarding, householdId, refreshHousehold } = useAuth();
+
+  // If user is authenticated but needs onboarding (no household)
+  if (user && needsOnboarding && !householdId) {
+    return (
+      <HouseholdOnboarding
+        userId={user.id}
+        onComplete={() => {
+          refreshHousehold();
+        }}
+      />
+    );
+  }
+
+  // Normal app flow
+  return <MainApp />;
 }
 
 function MainApp() {

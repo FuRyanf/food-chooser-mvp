@@ -19,9 +19,12 @@ A smart, fun meal recommendation app with **Gacha Egg** animations, budget track
 
 ### 👥 Household Accounts
 - **Google OAuth** - Secure one-click authentication
+- **Email Invites** - Invite members via email with secure time-limited links
 - **Shared Data** - Multiple Google accounts share one household
 - **Person Tracking** - See who paid for what
 - **Member Management** - Add/remove household members
+- **Household Switching** - Seamlessly switch between households
+- **Smart Cleanup** - Auto-delete empty households and data
 
 ### 🌡️ Contextual Recommendations
 - **Weather-Aware** - Suggests hot/cold meals based on weather
@@ -165,9 +168,10 @@ food-chooser-mvp/
 
 ### Household Management
 1. Go to **Household** tab
-2. View members and roles
-3. Rename your household
-4. Share household ID with others to invite
+2. **Invite members** - Enter email, send secure invite link
+3. View pending invitations and member list
+4. Rename your household
+5. Leave household (with automatic data cleanup if last member)
 
 ---
 
@@ -319,12 +323,36 @@ Open an issue or submit a pull request.
 
 ---
 
+## 🏠 Household Invite System
+
+FuDi includes a complete household management system with email invitations:
+
+### Features
+- **First-time onboarding** - Choose to create new household or join existing
+- **Email invitations** - Owners can invite members with secure, time-limited links
+- **Single household** - Each user belongs to one household at a time
+- **Household switching** - Accept invite to switch households with confirmation
+- **Leave anytime** - Users can leave, with automatic cleanup if last member
+- **Data isolation** - All meals, groceries, and preferences scoped to households
+
+### Quick Start
+1. Sign in with Google
+2. Create a new household or wait for an invitation
+3. Invite others by entering their email in Household Settings
+4. Share the generated invite link (copied to clipboard)
+5. Recipients click link to join your household
+
+**For complete details, see [HOUSEHOLD_INVITE_SYSTEM.md](HOUSEHOLD_INVITE_SYSTEM.md)**
+
+---
+
 ## 📧 Support
 
 For questions or issues:
 1. Check the troubleshooting section above
-2. Review archived docs in `docs/archive/`
-3. Open a GitHub issue
+2. Review household invite docs: [HOUSEHOLD_INVITE_SYSTEM.md](HOUSEHOLD_INVITE_SYSTEM.md)
+3. Check archived docs in `docs/archive/`
+4. Open a GitHub issue
 
 ---
 

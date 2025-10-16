@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null
   householdId: string | null
   householdName: string | null
+  needsOnboarding: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   loading: boolean
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [householdId, setHouseholdId] = useState<string | null>(null)
   const [householdName, setHouseholdName] = useState<string | null>(null)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -119,9 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (memberError) {
         console.error('❌ Error fetching household membership:', memberError)
-        console.log('🔧 Creating fallback household...')
-        // Don't return, try to create household instead
-        await createHouseholdForUser(userId)
+        console.log('⚠️ Query failed, user may need onboarding')
+        setNeedsOnboarding(true)
         setLoading(false)
         return
       }
@@ -144,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Set a default household so app can work
           setHouseholdId(householdId)
           setHouseholdName('My Household')
+          setNeedsOnboarding(false)
           setLoading(false)
           return
         }
@@ -151,11 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🏠 Household data:', householdData)
         setHouseholdId(householdData.id)
         setHouseholdName(householdData.name)
+        setNeedsOnboarding(false)
         setLoading(false)
       } else {
-        // User doesn't have a household, create one
-        console.log('⚠️ No household found, creating one...')
-        await createHouseholdForUser(userId)
+        // User doesn't have a household - show onboarding
+        console.log('⚠️ No household found, user needs onboarding')
+        setNeedsOnboarding(true)
         setLoading(false)
       }
     } catch (error) {
@@ -165,47 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const createHouseholdForUser = async (userId: string) => {
-    if (!supabase) return
-    
-    try {
-      console.log('Creating household for user:', userId)
-      
-      // Create household
-      const { data: household, error: householdError} = await supabase
-        .from('households')
-        .insert({ name: 'My Household' })
-        .select()
-        .single()
-
-      if (householdError) {
-        console.error('Error creating household:', householdError)
-        return
-      }
-
-      console.log('Household created:', household)
-
-      // Add user as household owner
-      const { error: memberError } = await supabase
-        .from('household_members')
-        .insert({
-          household_id: household.id,
-          user_id: userId,
-          role: 'owner'
-        })
-
-      if (memberError) {
-        console.error('Error adding household member:', memberError)
-        return
-      }
-
-      console.log('User linked to household')
-      setHouseholdId(household.id)
-      setHouseholdName(household.name)
-    } catch (error) {
-      console.error('Error creating household:', error)
-    }
-  }
 
   const refreshHousehold = async () => {
     if (user) {
@@ -257,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         householdId,
         householdName,
+        needsOnboarding,
         signInWithGoogle,
         signOut,
         loading,
