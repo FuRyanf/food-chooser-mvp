@@ -161,7 +161,55 @@ CREATE INDEX IF NOT EXISTS idx_household_invitations_token ON household_invitati
 CREATE INDEX IF NOT EXISTS idx_household_invitations_household ON household_invitations(household_id);
 
 -- ============================================
--- PART 6: ROW LEVEL SECURITY (RLS)
+-- PART 6: HELPER FUNCTIONS FOR RLS
+-- ============================================
+
+-- Drop helper functions first (for idempotency)
+DROP FUNCTION IF EXISTS get_user_household_id();
+DROP FUNCTION IF EXISTS user_is_household_owner(UUID);
+
+-- Helper function to get user's household_id (bypasses RLS)
+CREATE OR REPLACE FUNCTION get_user_household_id()
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_household_id UUID;
+BEGIN
+  SELECT household_id INTO v_household_id
+  FROM household_members
+  WHERE user_id = auth.uid()
+  LIMIT 1;
+  
+  RETURN v_household_id;
+END;
+$$;
+
+-- Helper function to check if user is owner of a household (bypasses RLS)
+CREATE OR REPLACE FUNCTION user_is_household_owner(p_household_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_is_owner BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM household_members
+    WHERE user_id = auth.uid()
+    AND household_id = p_household_id
+    AND role = 'owner'
+  ) INTO v_is_owner;
+  
+  RETURN v_is_owner;
+END;
+$$;
+
+-- ============================================
+-- PART 7: ROW LEVEL SECURITY (RLS)
 -- ============================================
 
 -- Enable RLS on all tables
@@ -277,7 +325,7 @@ CREATE POLICY "Owners can create invitations" ON household_invitations
   FOR INSERT WITH CHECK (user_is_household_owner(household_id));
 
 -- ============================================
--- PART 7: TRIGGERS
+-- PART 8: TRIGGERS
 -- ============================================
 
 -- Trigger to auto-create household when user signs up
@@ -343,10 +391,10 @@ CREATE TRIGGER on_auth_user_created_profile
   EXECUTE FUNCTION public.handle_new_user_profile();
 
 -- ============================================
--- PART 8: RPC FUNCTIONS
+-- PART 9: RPC FUNCTIONS
 -- ============================================
 
--- Drop all existing functions first (for idempotency)
+-- Drop all existing RPC functions first (for idempotency)
 DROP FUNCTION IF EXISTS get_user_household(UUID);
 DROP FUNCTION IF EXISTS get_household_members_with_emails(UUID);
 DROP FUNCTION IF EXISTS generate_household_invite(UUID);
@@ -354,48 +402,6 @@ DROP FUNCTION IF EXISTS accept_household_invite(TEXT);
 DROP FUNCTION IF EXISTS get_invite_info(TEXT);
 DROP FUNCTION IF EXISTS get_household_invites(UUID);
 DROP FUNCTION IF EXISTS leave_household();
-DROP FUNCTION IF EXISTS get_user_household_id();
-DROP FUNCTION IF EXISTS user_is_household_owner(UUID);
-
--- Helper function to get user's household_id (bypasses RLS)
-CREATE OR REPLACE FUNCTION get_user_household_id()
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_household_id UUID;
-BEGIN
-  SELECT household_id INTO v_household_id
-  FROM household_members
-  WHERE user_id = auth.uid()
-  LIMIT 1;
-  
-  RETURN v_household_id;
-END;
-$$;
-
--- Helper function to check if user is owner of a household (bypasses RLS)
-CREATE OR REPLACE FUNCTION user_is_household_owner(p_household_id UUID)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_is_owner BOOLEAN;
-BEGIN
-  SELECT EXISTS (
-    SELECT 1 FROM household_members
-    WHERE user_id = auth.uid()
-    AND household_id = p_household_id
-    AND role = 'owner'
-  ) INTO v_is_owner;
-  
-  RETURN v_is_owner;
-END;
-$$;
 
 -- Function to get user's household
 CREATE OR REPLACE FUNCTION get_user_household(p_user_id UUID)
@@ -724,7 +730,7 @@ END;
 $$;
 
 -- ============================================
--- PART 9: GRANT PERMISSIONS
+-- PART 10: GRANT PERMISSIONS
 -- ============================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON meals TO authenticated;
