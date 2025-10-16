@@ -1,54 +1,57 @@
 #!/bin/bash
 
-# FuDi Food Chooser - Supabase Setup Script
-# This script helps you set up the Supabase backend
-
-echo "🍕 FuDi Food Chooser - Supabase Setup"
-echo "======================================"
+echo "🍜 FuDi - Supabase Setup Helper"
+echo "================================"
 echo ""
 
-# Check if .env.local already exists
+# Check if .env.local exists
 if [ -f ".env.local" ]; then
-    echo "⚠️  .env.local already exists. Skipping environment setup."
-    echo ""
+  echo "✅ .env.local already exists"
+  echo ""
+  read -p "Do you want to overwrite it? (y/N) " -n 1 -r
+  echo ""
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Keeping existing .env.local"
+  else
+    cp env.example .env.local
+    echo "✅ Created new .env.local from env.example"
+  fi
 else
-    echo "📝 Setting up environment variables..."
-    
-    # Copy example file
-    if [ -f "env.example" ]; then
-        cp env.example .env.local
-        echo "✅ Created .env.local from env.example"
-        echo ""
-        echo "🔑 Please edit .env.local with your Supabase credentials:"
-        echo "   - VITE_SUPABASE_URL=your_project_url"
-        echo "   - VITE_SUPABASE_ANON_KEY=your_anon_key"
-        echo ""
-        echo "   You can find these in your Supabase dashboard under Settings → API"
-        echo ""
-    else
-        echo "❌ env.example not found. Please create it manually."
-        exit 1
-    fi
-fi
-
-# Check if dependencies are installed
-echo "📦 Checking dependencies..."
-if [ ! -d "node_modules" ]; then
-    echo "Installing dependencies..."
-    npm install
-    echo "✅ Dependencies installed"
-else
-    echo "✅ Dependencies already installed"
+  cp env.example .env.local
+  echo "✅ Created .env.local from env.example"
 fi
 
 echo ""
-echo "🎯 Next steps:"
-echo "1. Create a Supabase project at https://supabase.com"
-echo "2. Get your API keys from Settings → API"
-echo "3. Update .env.local with your credentials"
-echo "4. Run the SQL schema in Supabase SQL Editor (see supabase-schema.sql)"
-echo "5. Start the app with: npm run dev"
+echo "📋 Next Steps:"
 echo ""
-echo "📚 See SUPABASE_SETUP.md for detailed instructions"
+echo "1️⃣  Set up your Supabase project:"
+echo "   • Go to https://supabase.com and create a new project"
+echo "   • Wait for provisioning (~2 minutes)"
 echo ""
-echo "🚀 Happy coding! 🍜🍔"
+echo "2️⃣  Get your credentials:"
+echo "   • Go to Settings → API in your Supabase dashboard"
+echo "   • Copy your Project URL and anon public key"
+echo ""
+echo "3️⃣  Update your .env.local file:"
+echo "   • Open .env.local in your editor"
+echo "   • Replace the placeholder values with your actual credentials"
+echo ""
+echo "4️⃣  Run the database setup:"
+echo "   • Go to SQL Editor in Supabase dashboard"
+echo "   • Copy contents of database-setup-complete.sql"
+echo "   • Run the script"
+echo ""
+echo "5️⃣  Set up Google OAuth:"
+echo "   • Follow the guide in SETUP_GUIDE.md"
+echo "   • Configure Google Cloud Console"
+echo "   • Enable Google provider in Supabase Auth"
+echo ""
+echo "6️⃣  Start the development server:"
+echo "   npm run dev"
+echo ""
+echo "📖 For detailed instructions, see:"
+echo "   • README.md - Quick start and overview"
+echo "   • SETUP_GUIDE.md - Complete setup walkthrough"
+echo ""
+echo "Need help? Check docs/README.md for additional resources!"
+echo ""
