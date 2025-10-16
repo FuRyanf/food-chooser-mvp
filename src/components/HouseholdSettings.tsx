@@ -149,16 +149,13 @@ export function HouseholdSettings() {
       const inviteUrl = `${window.location.origin}/invite/${inviteData.invite_token}`
 
       // Copy invite link to clipboard
-      navigator.clipboard.writeText(inviteUrl)
+      await navigator.clipboard.writeText(inviteUrl)
 
-      setSuccess(`Invite created! Link copied to clipboard: ${inviteUrl}`)
+      setSuccess(`✅ Invite link copied to clipboard! Share it with ${inviteEmail}:\n\n${inviteUrl}`)
       setInviteEmail('')
       
-      // In production, you would send an email here via Supabase Edge Function
-      console.log('Invite link:', inviteUrl)
-      
       await fetchInvitations()
-      setTimeout(() => setSuccess(null), 10000)
+      setTimeout(() => setSuccess(null), 15000)
     } catch (err: any) {
       console.error('Error sending invite:', err)
       setError(err.message || 'Failed to create invite')
@@ -271,7 +268,10 @@ export function HouseholdSettings() {
       {success && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-2">
           <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-green-700">{success}</p>
+          <div className="flex-1">
+            <p className="text-sm text-green-700 font-semibold mb-2">Link Copied to Clipboard!</p>
+            <p className="text-xs text-green-600 whitespace-pre-wrap break-all">{success}</p>
+          </div>
         </div>
       )}
 
@@ -307,9 +307,9 @@ export function HouseholdSettings() {
             Invite Members
           </h3>
           <p className="text-sm text-blue-700 mb-4">
-            Send an invitation email to add someone to your household
+            Generate an invite link and share it manually (email, text, etc.)
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <input
               type="email"
               value={inviteEmail}
@@ -322,15 +322,23 @@ export function HouseholdSettings() {
             <button
               onClick={sendInvite}
               disabled={loading || !inviteEmail.trim()}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
             >
               <Send className="w-4 h-4" />
-              Send Invite
+              {loading ? 'Creating...' : 'Generate Link'}
             </button>
           </div>
-          <p className="text-xs text-blue-600 mt-3">
-            💡 Invitations expire after 7 days and can only be used once.
-          </p>
+          <div className="bg-blue-100 border border-blue-300 rounded-lg p-3 text-xs text-blue-800">
+            <p className="font-semibold mb-1">📋 How it works:</p>
+            <ol className="space-y-1 ml-4 list-decimal">
+              <li>Enter the person's email above</li>
+              <li>Click "Generate Link" to create an invite</li>
+              <li>Link is automatically copied to your clipboard</li>
+              <li>Manually send the link to them (email, text, Slack, etc.)</li>
+              <li>They click the link and join your household</li>
+            </ol>
+            <p className="mt-2 text-blue-700">💡 Links expire after 7 days and work only once.</p>
+          </div>
         </div>
       )}
 
@@ -339,7 +347,7 @@ export function HouseholdSettings() {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
             <Clock className="w-5 h-5 text-gray-500" />
-            Pending Invitations ({invitations.filter(i => i.status === 'pending' && !i.is_expired).length})
+            Invite History ({invitations.filter(i => i.status === 'pending' && !i.is_expired).length} active)
           </h3>
           <div className="space-y-2">
             {invitations.map((invite) => {
@@ -361,10 +369,10 @@ export function HouseholdSettings() {
                       {isExpired ? (
                         <span className="text-red-600">Expired</span>
                       ) : invite.status === 'accepted' ? (
-                        <span className="text-green-600">Accepted</span>
+                        <span className="text-green-600">Accepted ✓</span>
                       ) : (
                         <>
-                          Sent {new Date(invite.created_at).toLocaleDateString()} • 
+                          Created {new Date(invite.created_at).toLocaleDateString()} • 
                           Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
                         </>
                       )}
@@ -373,8 +381,10 @@ export function HouseholdSettings() {
                   {!isExpired && (
                     <button
                       onClick={() => copyInviteLink(invite.invite_token)}
-                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
+                      title="Copy invite link to share again"
                     >
+                      <Mail className="w-3 h-3" />
                       Copy Link
                     </button>
                   )}

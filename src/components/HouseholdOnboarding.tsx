@@ -205,11 +205,11 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             <ol className="space-y-2 text-sm text-blue-800">
               <li className="flex gap-2">
                 <span className="font-semibold">1.</span>
-                <span>Ask a household member to send you an invite from their Household Settings</span>
+                <span>Ask a household member to generate an invite link from their Household Settings</span>
               </li>
               <li className="flex gap-2">
                 <span className="font-semibold">2.</span>
-                <span>Check your email for the invitation link</span>
+                <span>They'll share the invite link with you (via email, text, Slack, etc.)</span>
               </li>
               <li className="flex gap-2">
                 <span className="font-semibold">3.</span>
@@ -220,7 +220,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
             <p className="text-sm text-gray-700">
-              💡 <strong>Tip:</strong> Invitations are valid for 7 days and can only be used once.
+              💡 <strong>Note:</strong> Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.
             </p>
           </div>
 
