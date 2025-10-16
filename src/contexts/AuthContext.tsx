@@ -126,11 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         
         // If direct query fails, try RPC as fallback (but not for "not found")
-        if (memberError && memberError.code !== 'PGRST116' || !memberData) {
+        if ((memberError && memberError.code !== 'PGRST116') || !memberData) {
           console.log('⚠️ Direct query needs fallback, trying RPC...')
           const rpcResult = await supabase
             .rpc('get_user_household', { user_uuid: userId })
-            .maybeSingle()
+            .limit(1)
+            .single()
           
           console.log('📊 RPC result:', { found: !!rpcResult.data, error: rpcResult.error?.message || 'none' })
           

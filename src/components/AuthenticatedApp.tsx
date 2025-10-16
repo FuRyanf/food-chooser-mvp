@@ -6,7 +6,7 @@ interface AuthenticatedAppProps {
 }
 
 export function AuthenticatedApp({ children }: AuthenticatedAppProps) {
-  const { user, householdId, loading } = useAuth()
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
@@ -24,7 +24,8 @@ export function AuthenticatedApp({ children }: AuthenticatedAppProps) {
     )
   }
 
-  if (!user || !householdId) {
+  // Only check for user - let AppRouter handle the household/onboarding logic
+  if (!user) {
     return <Login />
   }
 
