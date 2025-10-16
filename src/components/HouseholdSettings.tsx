@@ -30,7 +30,7 @@ export function HouseholdSettings() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [newHouseholdName, setNewHouseholdName] = useState('')
   const [newDisplayName, setNewDisplayName] = useState('')
-  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -130,52 +130,40 @@ export function HouseholdSettings() {
     }
   }
 
-  const sendInvite = async () => {
-    if (!householdId || !user?.id || !supabase) {
+  const generateInviteCode = async () => {
+    if (!householdId || !supabase) {
       setError('Unable to generate invite')
       return
-    }
-
-    // Email is optional - just for tracking/labeling
-    const emailToUse = inviteEmail.trim() || 'Anonymous invite'
-    
-    // If email provided, validate it
-    if (inviteEmail.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(inviteEmail)) {
-        setError('Please enter a valid email address (or leave blank)')
-        return
-      }
     }
 
     try {
       setLoading(true)
       setError(null)
+      setSuccess(null)
 
       const { data, error } = await supabase
         .rpc('generate_household_invite', {
-          p_household_id: householdId,
-          p_inviter_id: user.id,
-          p_invite_email: emailToUse
+          p_household_id: householdId
         })
 
       if (error) throw error
 
-      const inviteData = data[0]
-      const inviteUrl = `${window.location.origin}/invite/${inviteData.invite_token}`
-
-      // Copy invite link to clipboard
-      await navigator.clipboard.writeText(inviteUrl)
-
-      const recipientText = inviteEmail.trim() ? ` with ${inviteEmail}` : ''
-      setSuccess(`✅ Invite link copied to clipboard! Share it${recipientText}:\n\n${inviteUrl}`)
-      setInviteEmail('')
-      
-      await fetchInvitations()
-      setTimeout(() => setSuccess(null), 15000)
+      if (data && data.length > 0) {
+        const code = data[0].invite_code
+        setInviteCode(code)
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(code)
+        
+        setSuccess('Code copied to clipboard!')
+        
+        // Refresh invitations list
+        await fetchInvitations()
+        setTimeout(() => setSuccess(null), 3000)
+      }
     } catch (err: any) {
-      console.error('Error sending invite:', err)
-      setError(err.message || 'Failed to create invite')
+      console.error('Error generating invite:', err)
+      setError(err.message || 'Failed to generate code')
     } finally {
       setLoading(false)
     }
@@ -385,43 +373,54 @@ export function HouseholdSettings() {
       {/* Invite Members */}
       {isOwner && (
         <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-4 sm:p-6 rounded-lg border border-blue-200 dark:border-blue-800">
-          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
-            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
+          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
             Invite Members
           </h3>
-          <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-200 mb-3 sm:mb-4">
-            Generate an invite link and share it manually
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="friend@example.com (optional)"
-              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-blue-950/50 text-gray-900 dark:text-gray-100 text-sm sm:text-base"
-              disabled={loading}
-              onKeyPress={(e) => e.key === 'Enter' && sendInvite()}
-            />
-            <button
-              onClick={sendInvite}
-              disabled={loading}
-              className="px-4 sm:px-6 py-2.5 sm:py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap min-h-[44px]"
-            >
-              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="text-sm sm:text-base">{loading ? 'Creating...' : 'Generate Link'}</span>
-            </button>
-          </div>
-          <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-100">
-            <p className="font-semibold mb-1">📋 How it works:</p>
-            <ol className="space-y-1 ml-4 list-decimal">
-              <li>Optionally enter email above (just for your tracking)</li>
-              <li>Click "Generate Link" to create a secure invite</li>
-              <li>Link is automatically copied to your clipboard</li>
-              <li>Send the link via email, text, Slack, etc.</li>
-              <li>Recipient clicks link and joins your household</li>
-            </ol>
-            <p className="mt-2 text-blue-700 dark:text-blue-200">💡 Links expire after 7 days and work only once. Email field is optional.</p>
-          </div>
+          
+          {inviteCode ? (
+            <div className="space-y-3">
+              <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4 text-center">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Share this code:</p>
+                <div className="text-3xl font-bold tracking-widest text-blue-600 dark:text-blue-400 font-mono">
+                  {inviteCode}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteCode)
+                    setSuccess('Code copied!')
+                    setTimeout(() => setSuccess(null), 2000)
+                  }}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  📋 Copy Code
+                </button>
+              </div>
+              <p className="text-xs text-blue-700 dark:text-blue-200">
+                💡 Share this code with anyone you want to invite. Code expires in 7 days and can be used multiple times.
+              </p>
+              <button
+                onClick={() => setInviteCode(null)}
+                className="w-full text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2"
+              >
+                ← Hide Code
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-200">
+                Generate a simple code to invite people to your household
+              </p>
+              <button
+                onClick={generateInviteCode}
+                disabled={loading}
+                className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+              >
+                <Send className="w-4 h-4" />
+                {loading ? 'Generating...' : 'Generate Invite Code'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

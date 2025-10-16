@@ -18,6 +18,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
   const [mode, setMode] = useState<'choice' | 'create' | 'join'>('choice')
   const [householdName, setHouseholdName] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [joinCode, setJoinCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [language, setLanguage] = useState<Language>(() => resolveInitialLanguage())
@@ -106,6 +107,48 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
   const handleJoinInstructions = () => {
     setMode('join')
+  }
+
+  const handleJoinWithCode = async () => {
+    if (!joinCode.trim()) {
+      setError(t('Please enter an invite code'))
+      return
+    }
+
+    if (!supabase) {
+      setError(t('Database connection not available'))
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      // Call accept_household_invite with the code
+      const { data, error } = await supabase
+        .rpc('accept_household_invite', {
+          p_invite_code: joinCode.trim().toUpperCase()
+        })
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        const result = data[0]
+        if (result.success) {
+          // Successfully joined!
+          onComplete()
+        } else {
+          setError(result.message || t('Failed to join household'))
+        }
+      } else {
+        setError(t('Invalid invite code'))
+      }
+    } catch (err: any) {
+      console.error('Error joining household:', err)
+      setError(err.message || t('Failed to join household'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (mode === 'choice') {
@@ -274,31 +317,46 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             </p>
           </div>
 
-          {/* Instructions */}
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 sm:p-5 space-y-3">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2">
-              <span>ℹ️</span>
-              <span>{t('How to join:')}</span>
-            </h3>
-            <ol className="space-y-2 text-xs sm:text-sm text-blue-800 dark:text-blue-200">
-              <li className="flex gap-2">
-                <span className="font-semibold">1.</span>
-                <span>{t('Ask a household member to generate an invite link from their Household Settings')}</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="font-semibold">2.</span>
-                <span>{t('They\'ll share the invite link with you (via email, text, Slack, etc.)')}</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="font-semibold">3.</span>
-                <span>{t('Click the link to automatically join their household')}</span>
-              </li>
-            </ol>
+          {/* Code Input */}
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('Enter Invite Code')}
+            </label>
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => {
+                setJoinCode(e.target.value.toUpperCase())
+                setError('')
+              }}
+              placeholder={t('e.g., ABC123')}
+              maxLength={6}
+              className="w-full px-4 py-3 text-center text-2xl font-mono font-bold tracking-widest border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 uppercase"
+              disabled={loading}
+            />
+            
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-xs sm:text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleJoinWithCode}
+              disabled={loading || !joinCode.trim()}
+              className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors min-h-[44px]"
+            >
+              {loading ? t('Joining...') : t('Join Household')}
+            </button>
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">
-            <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
-              💡 <strong>{t('Note:')}</strong> {t('Invite links expire after 7 days and work only once. No automatic emails are sent - links must be shared manually.')}
+          {/* Instructions */}
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-xs space-y-2">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+              ℹ️ {t('How to get a code:')}
+            </h3>
+            <p className="text-blue-800 dark:text-blue-200">
+              {t('Ask a household owner to generate an invite code from their Household Settings and share it with you.')}
             </p>
           </div>
 

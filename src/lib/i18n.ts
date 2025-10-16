@@ -260,6 +260,14 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Profile updated successfully!': { zh: '個人檔案更新成功！' },
   'Please enter a name': { zh: '請輸入名稱' },
   'Failed to update profile': { zh: '更新個人檔案失敗' },
+  'Enter Invite Code': { zh: '輸入邀請碼' },
+  'e.g., ABC123': { zh: '例如：ABC123' },
+  'Joining...': { zh: '加入中...' },
+  'Join Household': { zh: '加入家庭' },
+  'Please enter an invite code': { zh: '請輸入邀請碼' },
+  'Invalid invite code': { zh: '邀請碼無效' },
+  'How to get a code:': { zh: '如何獲取邀請碼：' },
+  'Ask a household owner to generate an invite code from their Household Settings and share it with you.': { zh: '請家庭擁有者從家庭設定中生成邀請碼並分享給你。' },
 };
 
 export function translateText(text: string, language: Language): string {
