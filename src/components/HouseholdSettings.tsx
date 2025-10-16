@@ -28,7 +28,7 @@ export function HouseholdSettings() {
   }, [householdId, householdName])
 
   const fetchMembers = async () => {
-    if (!householdId) return
+    if (!householdId || !supabase) return
 
     try {
       setLoading(true)
@@ -44,6 +44,7 @@ export function HouseholdSettings() {
       const membersWithEmails = await Promise.all(
         (data || []).map(async (member) => {
           // Try to get user metadata
+          if (!supabase) return { ...member, email: 'Unknown user' }
           const { data: userData } = await supabase.auth.admin.getUserById(member.user_id)
           return {
             ...member,
@@ -71,7 +72,7 @@ export function HouseholdSettings() {
   }
 
   const updateHouseholdName = async () => {
-    if (!householdId || !newHouseholdName.trim()) {
+    if (!householdId || !newHouseholdName.trim() || !supabase) {
       setError('Household name cannot be empty')
       return
     }
@@ -99,6 +100,8 @@ export function HouseholdSettings() {
   }
 
   const removeMember = async (memberId: string, memberUserId: string) => {
+    if (!supabase) return
+    
     // Don't allow removing yourself if you're the owner
     const currentMember = members.find(m => m.user_id === user?.id)
     if (currentMember?.role === 'owner' && memberUserId === user?.id) {

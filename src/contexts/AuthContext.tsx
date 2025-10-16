@@ -23,6 +23,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -53,6 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const fetchHousehold = async (userId: string) => {
+    if (!supabase) return
+    
     try {
       // Check if user belongs to a household
       const { data: memberData, error: memberError } = await supabase
@@ -96,9 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const createHouseholdForUser = async (userId: string) => {
+    if (!supabase) return
+    
     try {
       // Create household
-      const { data: household, error: householdError } = await supabase
+      const { data: household, error: householdError} = await supabase
         .from('households')
         .insert({ name: 'My Household' })
         .select()
@@ -137,6 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signInWithGoogle = async () => {
+    if (!supabase) return
+    
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -155,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    if (!supabase) return
+    
     try {
       const { error } = await supabase.auth.signOut()
       if (error) {

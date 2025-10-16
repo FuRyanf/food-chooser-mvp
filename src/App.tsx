@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2, Languages } from 'lucide-react';
+import { DollarSign, Egg, Filter, History, Info, Moon, Search, Sparkles, Sun, Trash2, Languages, LogOut, Users } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
@@ -7,6 +7,9 @@ import type { Database } from './lib/supabase';
 import { createPortal } from 'react-dom';
 import { Language, translateTemplate, translateText } from './lib/i18n';
 import crackedEggImg from '../image cracked egg.png';
+import { AuthenticatedApp } from './components/AuthenticatedApp';
+import { useAuth } from './contexts/AuthContext';
+import { HouseholdSettings } from './components/HouseholdSettings';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type MealInsert = Database['public']['Tables']['meals']['Insert'];
@@ -203,6 +206,15 @@ function computeMealScoreBreakdown(meal: Meal, budget: Budget, today: Weather) {
 }
 
 export default function App() {
+  return (
+    <AuthenticatedApp>
+      <MainApp />
+    </AuthenticatedApp>
+  );
+}
+
+function MainApp() {
+  const { householdId, user, signOut, householdName } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
   // Saved preferences used by computation
   const [budgetSaved, setBudgetSaved] = useState<Budget>({ min: 10, max: 35 });
@@ -243,10 +255,11 @@ export default function App() {
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   const isDarkTheme = theme === 'dark';
 
-  const navButtons: Array<{ key: 'home' | 'browse' | 'contributions'; label: string; icon: React.ComponentType<{ className?: string }>; description: string }> = [
+  const navButtons: Array<{ key: 'home' | 'browse' | 'contributions' | 'household'; label: string; icon: React.ComponentType<{ className?: string }>; description: string }> = [
     { key: 'home', label: t('Home'), icon: Sparkles, description: t('Mystery picks & logging') },
     { key: 'browse', label: t('Browse'), icon: Search, description: t('Browse your saved meals') },
     { key: 'contributions', label: t('Contributions'), icon: DollarSign, description: t('Track spending & contributions') },
+    { key: 'household', label: t('Household'), icon: Users, description: t('Manage household settings') },
   ];
 
   const panelClass = 'rounded-3xl border border-white/60 bg-white/80 p-6 shadow-lg shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70 dark:shadow-emerald-500/10';
@@ -285,8 +298,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [confirmDialog, closeConfirm]);
 
-  // Tabs: Home (default), Browse, Contributions
-  const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'>('home');
+  // Tabs: Home (default), Browse, Contributions, Household
+  const [activeTab, setActiveTab] = useState<'home'|'browse'|'contributions'|'household'>('home');
   const [browseSearch, setBrowseSearch] = useState('');
   const [browseHideDisabled, setBrowseHideDisabled] = useState(false);
   const [browseSort, setBrowseSort] = useState<'recent' | 'rating' | 'cost'>('recent');
@@ -322,7 +335,7 @@ export default function App() {
     // Load disabled items from Supabase
     (async () => {
       try {
-        const map = await FoodChooserAPI.getDisabledItems();
+        const map = await FoodChooserAPI.getDisabledItems(householdId!);
         setCoolOff(map);
       } catch (e) {
         // fallback to local cache if present
@@ -433,10 +446,10 @@ export default function App() {
       setLoading(true);
       setError(null);
       const [mealsData, prefsData, overridesData, groceriesData] = await Promise.all([
-        FoodChooserAPI.getMeals(),
-        FoodChooserAPI.getUserPreferences(),
-        FoodChooserAPI.getOverridesMap(),
-        FoodChooserAPI.getGroceries()
+        FoodChooserAPI.getMeals(householdId!),
+        FoodChooserAPI.getUserPreferences(householdId!),
+        FoodChooserAPI.getOverridesMap(householdId!),
+        FoodChooserAPI.getGroceries(householdId!)
       ]);
       setMeals(mealsData);
       setGroceries(groceriesData);
@@ -471,7 +484,7 @@ export default function App() {
     if (monthlyBudget !== null && (!isFinite(monthlyBudget) || monthlyBudget < 0)) { setPrefsError(t('Monthly budget must be a non-negative number.')); return; }
     try {
       setPrefsSaving(true);
-      const saved = await FoodChooserAPI.upsertUserPreferences({
+      const saved = await FoodChooserAPI.upsertUserPreferences(householdId!, {
         budget_min: min,
         budget_max: max,
         forbid_repeat_days: days,
@@ -593,12 +606,12 @@ export default function App() {
   }, [meals, groceries]);
 
   async function seedDemo(){
-    try { for (const meal of seedMeals) { await FoodChooserAPI.addMeal(meal); } await loadData(); }
+    try { for (const meal of seedMeals) { await FoodChooserAPI.addMeal(householdId!, meal); } await loadData(); }
     catch (err) { setError('Failed to load demo data'); }
   }
 
   async function addMeal(mealData: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>){
-    try { const newMeal = await FoodChooserAPI.addMeal(mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
+    try { const newMeal = await FoodChooserAPI.addMeal(householdId!, mealData); setMeals(prev => [newMeal, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date))); }
     catch (err) { setError('Failed to add meal'); }
   }
 
@@ -800,7 +813,7 @@ export default function App() {
       setError(null);
       const mealData = { date: new Date().toISOString(), restaurant: rec.suggestedRestaurant || null, dish: rec.dish ?? rec.label, cuisine: rec.label, cost: rec.estCost, rating: null, notes: null, seed_only: false, purchaser_name: 'Unknown' };
       await addMeal(mealData);
-      if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(rec.label, newCount); }
+      if (isOverride) { const newCount = (overrides[rec.label] ?? 0) + 1; await FoodChooserAPI.upsertCuisineOverride(householdId!, rec.label, newCount); }
     setIsOverride(false);
     } catch (err) { console.error('Error handling order:', err); setError('Failed to save meal'); }
   }
@@ -844,7 +857,7 @@ export default function App() {
     const [restaurantName, dishName] = key.split('|');
     const toDelete = meals.filter(m => (m.restaurant ?? '—') === restaurantName && m.dish === dishName);
     for (const m of toDelete) {
-      try { await FoodChooserAPI.deleteMeal(m.id); } catch (e) { console.error('Failed delete', e); setError('Failed to delete one or more entries'); }
+      try { await FoodChooserAPI.deleteMeal(householdId!, m.id); } catch (e) { console.error('Failed delete', e); setError('Failed to delete one or more entries'); }
     }
     setMeals(prev => prev.filter(m => !toDelete.some(d => d.id === m.id)));
   }
@@ -870,13 +883,13 @@ export default function App() {
           seed_only: (editMeal as any).seed_only === true,
           purchaser_name: editMeal.purchaser_name || 'Unknown'
         };
-        const created = await FoodChooserAPI.addMeal(newData);
+        const created = await FoodChooserAPI.addMeal(householdId!, newData);
         setMeals(prev => [created, ...prev].sort((a,b)=> +new Date(b.date) - +new Date(a.date)));
         setEditMeal(null);
         setEditOriginal(null);
       } else {
         // Update in place
-        const updated = await FoodChooserAPI.updateMeal(editMeal.id, {
+        const updated = await FoodChooserAPI.updateMeal(householdId!, editMeal.id, {
           date: editMeal.date,
           restaurant: editMeal.restaurant,
           dish: editMeal.dish,
@@ -906,7 +919,7 @@ export default function App() {
         tone: 'danger',
       });
       if (!ok) return;
-      await FoodChooserAPI.deleteMeal(id);
+      await FoodChooserAPI.deleteMeal(householdId!, id);
       setMeals(prev => prev.filter(m => m.id !== id));
     } catch (e) {
       console.error('Delete failed', e);
@@ -929,7 +942,7 @@ export default function App() {
     try {
       const amt = Number(gAmount) || 0;
       if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
-      const updated = await FoodChooserAPI.updateGrocery(editGrocery.id, {
+      const updated = await FoodChooserAPI.updateGrocery(householdId!, editGrocery.id, {
         date: toLocalISOString(gDate),
         amount: amt,
         notes: gStore || null,
@@ -960,7 +973,7 @@ export default function App() {
         tone: 'danger',
       });
       if (!ok) return;
-      await FoodChooserAPI.deleteGrocery(id);
+      await FoodChooserAPI.deleteGrocery(householdId!, id);
       setGroceries(prev => prev.filter(g => g.id !== id));
     } catch (e) {
       console.error('Delete grocery failed', e);
@@ -978,7 +991,7 @@ export default function App() {
         tone: 'danger',
       });
       if (!ok) return;
-      await FoodChooserAPI.deleteGrocery(id);
+      await FoodChooserAPI.deleteGrocery(householdId!, id);
       setGroceries(prev => prev.filter(g => g.id !== id));
     } catch (e) {
       console.error('Delete travel entry failed', e);
@@ -1131,9 +1144,9 @@ export default function App() {
     setCoolOff(prev => ({ ...prev, [normKey]: next }));
     setCoolSavingKey(normKey);
     try {
-      await FoodChooserAPI.setDisabledItem(r, d, next);
+      await FoodChooserAPI.setDisabledItem(householdId!, r, d, next);
       // re-fetch from Supabase to ensure persistence
-      const latest = await FoodChooserAPI.getDisabledItems();
+      const latest = await FoodChooserAPI.getDisabledItems(householdId!);
       setCoolOff(latest);
     } catch (e) {
       // rollback on failure
@@ -1160,9 +1173,9 @@ export default function App() {
       });
       for (const key of itemKeys) {
         const [r, d] = key.split('|');
-        await FoodChooserAPI.setDisabledItem(r, d, disabled);
+        await FoodChooserAPI.setDisabledItem(householdId!, r, d, disabled);
       }
-      const latest = await FoodChooserAPI.getDisabledItems();
+      const latest = await FoodChooserAPI.getDisabledItems(householdId!);
       setCoolOff(latest);
     } finally {
       setCuisineBatchSaving(false);
@@ -1240,7 +1253,21 @@ export default function App() {
             </div>
 
             <div className="flex flex-col gap-4 self-stretch">
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-3">
+                {/* User Profile */}
+                <div className="flex items-center gap-3 rounded-full border border-white/70 bg-white/60 px-4 py-2 backdrop-blur dark:border-white/10 dark:bg-zinc-800/60">
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100">{user?.email}</p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{householdName}</p>
+                  </div>
+                  <button
+                    onClick={signOut}
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-rose-200 bg-rose-100 text-rose-600 transition hover:bg-rose-200 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20"
+                    title={t('Sign out')}
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="btn-ghost flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-4 py-2 text-xs font-medium backdrop-blur dark:border-white/10 dark:bg-zinc-800/60"
@@ -1776,6 +1803,10 @@ export default function App() {
             })()}
           </div>
         </div>
+      ) : activeTab==='household' ? (
+        <div className={panelClass}>
+          <HouseholdSettings />
+        </div>
       ) : activeTab==='browse' ? (
         <div className={`${panelClass} space-y-6`}>
           <div className="flex flex-col gap-6">
@@ -2221,13 +2252,13 @@ export default function App() {
                   }
                   const amt = Number(gAmount) || 0;
                   if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
-                  await FoodChooserAPI.addGrocery({
+                  await FoodChooserAPI.addGrocery(householdId!, {
                     date: toLocalISOString(gDate),
                     amount: amt,
                     notes: gStore || null,
                     purchaser_name: groceryPurchaserName.trim() || 'Unknown'
                   });
-                  const latest = await FoodChooserAPI.getGroceries();
+                  const latest = await FoodChooserAPI.getGroceries(householdId!);
                   setGroceries(latest);
                   setGDate(todayISO()); setGAmount('50'); setGStore(''); setGroceryPurchaserName('');
                   showToast(t('Grocery trip saved'));
@@ -2281,14 +2312,14 @@ export default function App() {
                   if (!tag) { showToast(t('Add a travel tag first.')); return; }
                   try {
                     setTravelSaving(true);
-                    await FoodChooserAPI.addGrocery({
+                    await FoodChooserAPI.addGrocery(householdId!, {
                       date: toLocalISOString(travelDate),
                       amount: amt,
                       notes: travelNotes.trim() || null,
                       trip_label: tag,
                       purchaser_name: travelPurchaserName.trim() || 'Unknown'
                     });
-                    const latest = await FoodChooserAPI.getGroceries();
+                    const latest = await FoodChooserAPI.getGroceries(householdId!);
                     setGroceries(latest);
                     setTravelAmount('100');
                     setTravelTag('');
