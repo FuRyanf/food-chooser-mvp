@@ -120,16 +120,21 @@ export function HouseholdSettings() {
   }
 
   const sendInvite = async () => {
-    if (!householdId || !user?.id || !inviteEmail.trim() || !supabase) {
-      setError('Please enter an email address')
+    if (!householdId || !user?.id || !supabase) {
+      setError('Unable to generate invite')
       return
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(inviteEmail)) {
-      setError('Please enter a valid email address')
-      return
+    // Email is optional - just for tracking/labeling
+    const emailToUse = inviteEmail.trim() || 'Anonymous invite'
+    
+    // If email provided, validate it
+    if (inviteEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(inviteEmail)) {
+        setError('Please enter a valid email address (or leave blank)')
+        return
+      }
     }
 
     try {
@@ -140,7 +145,7 @@ export function HouseholdSettings() {
         .rpc('generate_household_invite', {
           p_household_id: householdId,
           p_inviter_id: user.id,
-          p_invite_email: inviteEmail.trim()
+          p_invite_email: emailToUse
         })
 
       if (error) throw error
@@ -151,7 +156,8 @@ export function HouseholdSettings() {
       // Copy invite link to clipboard
       await navigator.clipboard.writeText(inviteUrl)
 
-      setSuccess(`✅ Invite link copied to clipboard! Share it with ${inviteEmail}:\n\n${inviteUrl}`)
+      const recipientText = inviteEmail.trim() ? ` with ${inviteEmail}` : ''
+      setSuccess(`✅ Invite link copied to clipboard! Share it${recipientText}:\n\n${inviteUrl}`)
       setInviteEmail('')
       
       await fetchInvitations()
@@ -307,37 +313,37 @@ export function HouseholdSettings() {
             Invite Members
           </h3>
           <p className="text-sm text-blue-700 mb-4">
-            Generate an invite link and share it manually (email, text, etc.)
+            Generate an invite link and share it manually
           </p>
           <div className="flex gap-2 mb-3">
             <input
               type="email"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="friend@example.com"
+              placeholder="friend@example.com (optional - for tracking)"
               className="flex-1 px-4 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               disabled={loading}
               onKeyPress={(e) => e.key === 'Enter' && sendInvite()}
             />
             <button
               onClick={sendInvite}
-              disabled={loading || !inviteEmail.trim()}
+              disabled={loading}
               className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
             >
               <Send className="w-4 h-4" />
               {loading ? 'Creating...' : 'Generate Link'}
             </button>
           </div>
-          <div className="bg-blue-100 border border-blue-300 rounded-lg p-3 text-xs text-blue-800">
+          <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-100">
             <p className="font-semibold mb-1">📋 How it works:</p>
             <ol className="space-y-1 ml-4 list-decimal">
-              <li>Enter the person's email above</li>
-              <li>Click "Generate Link" to create an invite</li>
+              <li>Optionally enter email above (just for your tracking)</li>
+              <li>Click "Generate Link" to create a secure invite</li>
               <li>Link is automatically copied to your clipboard</li>
-              <li>Manually send the link to them (email, text, Slack, etc.)</li>
-              <li>They click the link and join your household</li>
+              <li>Send the link via email, text, Slack, etc.</li>
+              <li>Recipient clicks link and joins your household</li>
             </ol>
-            <p className="mt-2 text-blue-700">💡 Links expire after 7 days and work only once.</p>
+            <p className="mt-2 text-blue-700 dark:text-blue-200">💡 Links expire after 7 days and work only once. Email field is optional.</p>
           </div>
         </div>
       )}
