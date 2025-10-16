@@ -31,6 +31,8 @@ export function HouseholdSettings() {
   const [newHouseholdName, setNewHouseholdName] = useState('')
   const [newDisplayName, setNewDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [switchCode, setSwitchCode] = useState('')
+  const [showSwitchHousehold, setShowSwitchHousehold] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -270,44 +272,87 @@ export function HouseholdSettings() {
     }
   }
 
+  const handleSwitchHousehold = async () => {
+    if (!switchCode.trim()) {
+      setError('Please enter an invite code')
+      return
+    }
+
+    if (!supabase) {
+      setError('Database connection not available')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { data, error } = await supabase
+        .rpc('accept_household_invite', {
+          p_invite_code: switchCode.trim()
+        })
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        const result = data[0]
+        if (result.success) {
+          setSuccess(`Switched to ${result.household_name}!`)
+          setTimeout(() => {
+            window.location.reload()
+          }, 1500)
+        } else {
+          setError(result.message || 'Failed to switch households')
+        }
+      }
+    } catch (err: any) {
+      console.error('Error switching household:', err)
+      setError(err.message || 'Failed to switch households')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const currentUserRole = members.find(m => m.user_id === user?.id)?.role
   const isOwner = currentUserRole === 'owner'
   const isLastMember = members.length === 1
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          <Users className="w-5 h-5 sm:w-6 sm:h-6" />
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
+        <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-gray-100">
+          <Users className="w-6 h-6" />
           Household Settings
         </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+          Manage your profile, household, and members
+        </p>
       </div>
 
       {/* Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-2">
-          <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-2">
+          <XCircle className="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-2">
-          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-green-700 font-semibold mb-2">Link Copied to Clipboard!</p>
-            <p className="text-xs text-green-600 whitespace-pre-wrap break-all">{success}</p>
-          </div>
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-start gap-2">
+          <CheckCircle className="w-5 h-5 text-green-500 dark:text-green-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-green-700 dark:text-green-400 font-semibold">{success}</p>
         </div>
       )}
 
-      {/* Profile Settings */}
-      <div className="bg-white dark:bg-zinc-900 p-4 sm:p-6 rounded-lg shadow border-l-4 border-orange-500">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-          <User className="w-4 h-4 sm:w-5 sm:h-5" />
-          Your Profile
-        </h3>
+      {/* Profile & Household Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Profile Settings */}
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <User className="w-5 h-5 text-orange-500" />
+            Your Profile
+          </h3>
         
         {profileError && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-xs sm:text-sm mb-3">
@@ -321,52 +366,61 @@ export function HouseholdSettings() {
           </div>
         )}
 
-        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-          Display Name
-        </label>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          This name will default as the "Who paid?" in your meal and grocery entries
-        </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={newDisplayName}
-            onChange={(e) => setNewDisplayName(e.target.value)}
-            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
-            placeholder="e.g., Ryan, Sarah"
-            disabled={loading || profileLoading}
-          />
-          <button
-            onClick={handleUpdateProfile}
-            disabled={loading || profileLoading || newDisplayName === displayName || !newDisplayName.trim()}
-            className="px-4 sm:px-6 py-2.5 sm:py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 active:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-h-[44px]"
-          >
-            {loading ? 'Saving...' : 'Update Name'}
-          </button>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            This name defaults as "Who paid?" in entries
+          </p>
+          
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={newDisplayName}
+              onChange={(e) => setNewDisplayName(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
+              placeholder="e.g., Ryan, Sarah"
+              disabled={loading || profileLoading}
+            />
+            
+            {profileError && (
+              <p className="text-xs text-red-600 dark:text-red-400">{profileError}</p>
+            )}
+            {profileSuccess && (
+              <p className="text-xs text-green-600 dark:text-green-400">{profileSuccess}</p>
+            )}
+            
+            <button
+              onClick={handleUpdateProfile}
+              disabled={loading || profileLoading || newDisplayName === displayName || !newDisplayName.trim()}
+              className="w-full px-4 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 active:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              {loading ? 'Saving...' : 'Update'}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Household Name */}
-      <div className="bg-white dark:bg-zinc-900 p-4 sm:p-6 rounded-lg shadow">
-        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-          Household Name
-        </label>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            value={newHouseholdName}
-            onChange={(e) => setNewHouseholdName(e.target.value)}
-            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
-            placeholder="My Family"
-            disabled={loading}
-          />
-          <button
-            onClick={updateHouseholdName}
-            disabled={loading || newHouseholdName === householdName}
-            className="px-4 sm:px-6 py-2.5 sm:py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 active:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-h-[44px]"
-          >
-            Save
-          </button>
+        {/* Household Name */}
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-purple-500" />
+            Household Name
+          </h3>
+          
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={newHouseholdName}
+              onChange={(e) => setNewHouseholdName(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
+              placeholder="My Family"
+              disabled={loading}
+            />
+            <button
+              onClick={updateHouseholdName}
+              disabled={loading || newHouseholdName === householdName}
+              className="w-full px-4 py-2.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 active:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
 
@@ -379,31 +433,57 @@ export function HouseholdSettings() {
           </h3>
           
           {inviteCode ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Code Display */}
               <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4 text-center">
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Share this code:</p>
-                <div className="text-3xl font-bold tracking-widest text-blue-600 dark:text-blue-400 font-mono">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Invite Code:</p>
+                <div className="text-3xl font-bold tracking-widest text-blue-600 dark:text-blue-400 font-mono mb-3">
                   {inviteCode}
                 </div>
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(inviteCode)
-                    setSuccess('Code copied!')
+                    setSuccess('Code copied to clipboard!')
                     setTimeout(() => setSuccess(null), 2000)
                   }}
-                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
                 >
                   📋 Copy Code
                 </button>
               </div>
+
+              {/* Link Display */}
+              <div className="bg-white dark:bg-blue-950/50 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Or share this link:</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={`${window.location.origin}/invite/${inviteCode}`}
+                    readOnly
+                    className="flex-1 px-3 py-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/invite/${inviteCode}`)
+                      setSuccess('Link copied to clipboard!')
+                      setTimeout(() => setSuccess(null), 2000)
+                    }}
+                    className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap"
+                  >
+                    📋 Copy Link
+                  </button>
+                </div>
+              </div>
+
               <p className="text-xs text-blue-700 dark:text-blue-200">
-                💡 Share this code with anyone you want to invite. Code expires in 7 days and can be used multiple times.
+                💡 Code and link expire in 7 days. Can be used by multiple people.
               </p>
+              
               <button
                 onClick={() => setInviteCode(null)}
-                className="w-full text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2"
+                className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2"
               >
-                ← Hide Code
+                ← Hide
               </button>
             </div>
           ) : (

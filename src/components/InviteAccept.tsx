@@ -54,7 +54,7 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
       
       // RPC returns a TABLE, so we need to handle it as an array
       const { data, error } = await supabase
-        .rpc('get_invite_info', { p_invite_token: inviteToken })
+        .rpc('get_invite_info', { p_invite_code: inviteToken })
       
       console.log('📊 Invite info response:', { data, error })
 
@@ -65,7 +65,7 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
 
       // Data should be an array from the TABLE return type
       if (!data || !Array.isArray(data) || data.length === 0) {
-        setError('Invalid or expired invitation link')
+        setError('Invalid or expired invitation code')
         setLoading(false)
         return
       }
@@ -88,7 +88,7 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
 
     console.log('🔄 Accepting invite - user state:', { userId: user.id, householdId, showSwitchConfirm })
 
-    // If user is already in a household, show confirmation
+    // If user is already in a household and hasn't confirmed, show confirmation
     if (householdId && !showSwitchConfirm) {
       console.log('⚠️ User already has household, showing switch confirmation')
       setShowSwitchConfirm(true)
@@ -98,12 +98,14 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
     try {
       setAccepting(true)
       setError('')
+      setSuccess('')
 
-      console.log('🔄 Calling accept_household_invite RPC...')
+      console.log('📞 Calling accept_household_invite with code:', inviteToken)
+      
+      // RPC returns a TABLE, so we need to handle it as an array
       const { data, error } = await supabase
         .rpc('accept_household_invite', {
-          p_invite_token: inviteToken,
-          p_user_id: user.id
+          p_invite_code: inviteToken
         })
 
       console.log('📊 Accept invite response:', { data, error })
@@ -113,21 +115,25 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
         throw error
       }
 
-      // Data should be an array from the TABLE return type
-      if (data && Array.isArray(data) && data.length > 0) {
-        const result = data[0]
-        console.log('✅ Invite acceptance result:', result)
-        
-        if (result.success) {
-          setSuccess(result.message || 'Successfully joined household!')
-          setTimeout(() => {
-            onAccepted()
-          }, 1500)
-        } else {
-          throw new Error(result.message || 'Failed to accept invitation')
-        }
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        setError('Failed to accept invitation')
+        return
+      }
+
+      const result = data[0]
+      console.log('✅ Accept result:', result)
+
+      if (result.success) {
+        const message = householdId 
+          ? `Switched to ${result.household_name}! Your old household has been left.`
+          : `Successfully joined ${result.household_name}!`
+        setSuccess(message)
+        setTimeout(() => {
+          console.log('✅ Calling onAccepted callback')
+          onAccepted()
+        }, 2000)
       } else {
-        throw new Error('Invalid response from server')
+        setError(result.message || 'Failed to join household')
       }
     } catch (err: any) {
       console.error('💥 Error accepting invite:', err)

@@ -458,7 +458,7 @@ BEGIN
 END;
 $$;
 
--- Function to accept household invite (reusable)
+-- Function to accept household invite (reusable, auto-leaves current household)
 CREATE OR REPLACE FUNCTION accept_household_invite(p_invite_code TEXT)
 RETURNS TABLE (
   success BOOLEAN,
@@ -475,6 +475,7 @@ DECLARE
   v_household_name TEXT;
   v_existing_household_id UUID;
   v_invite_id UUID;
+  v_remaining_members INTEGER;
 BEGIN
   v_user_id := auth.uid();
   
@@ -483,12 +484,12 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Find the invite by code (case-insensitive)
+  -- Find the invite by code (case-insensitive, extract last 6 chars for flexibility)
   SELECT hi.id, hi.household_id, h.name
   INTO v_invite_id, v_household_id, v_household_name
   FROM household_invitations hi
   JOIN households h ON h.id = hi.household_id
-  WHERE UPPER(hi.invite_token) = UPPER(p_invite_code)
+  WHERE UPPER(hi.invite_token) = UPPER(RIGHT(TRIM(p_invite_code), 6))
   AND hi.status = 'pending'
   AND hi.expires_at > NOW()
   LIMIT 1;
@@ -510,16 +511,33 @@ BEGIN
     RETURN;
   END IF;
 
-  -- If user is in a different household, they need to leave first
+  -- If user is in a different household, auto-leave it
   IF v_existing_household_id IS NOT NULL THEN
-    RETURN QUERY SELECT FALSE, NULL::UUID, NULL::TEXT, 'Must leave current household first'::TEXT;
-    RETURN;
+    -- Remove user from old household
+    DELETE FROM household_members
+    WHERE user_id = v_user_id;
+    
+    -- Check if old household is now empty
+    SELECT COUNT(*) INTO v_remaining_members
+    FROM household_members
+    WHERE household_id = v_existing_household_id;
+    
+    -- If empty, clean up the old household
+    IF v_remaining_members = 0 THEN
+      DELETE FROM household_invitations WHERE household_id = v_existing_household_id;
+      DELETE FROM meals WHERE household_id = v_existing_household_id;
+      DELETE FROM groceries WHERE household_id = v_existing_household_id;
+      DELETE FROM user_preferences WHERE household_id = v_existing_household_id;
+      DELETE FROM cuisine_overrides WHERE household_id = v_existing_household_id;
+      DELETE FROM disabled_items WHERE household_id = v_existing_household_id;
+      DELETE FROM households WHERE id = v_existing_household_id;
+    END IF;
   END IF;
 
-  -- Add user to the household
+  -- Add user to the new household
   INSERT INTO household_members (household_id, user_id, role)
   VALUES (v_household_id, v_user_id, 'member')
-  ON CONFLICT (user_id) DO NOTHING;
+  ON CONFLICT (user_id) DO UPDATE SET household_id = v_household_id;
 
   -- Note: invite remains 'pending' for reuse
   
