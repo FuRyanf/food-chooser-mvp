@@ -184,11 +184,17 @@ export class FoodChooserAPI {
   static async upsertUserPreferences(householdId: string, prefs: Omit<UserPreferencesInsert, 'household_id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<UserPreferences> {
     checkSupabase()
     
+    // Get current user
+    const { data: { user } } = await supabase!.auth.getUser()
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+    
     const now = new Date().toISOString()
     const prefsData: UserPreferencesInsert = {
       ...prefs,
       household_id: householdId,
-      user_id: householdId,
+      user_id: user.id,  // ✅ Use actual user ID, not household ID
       created_at: now,
       updated_at: now
     }
