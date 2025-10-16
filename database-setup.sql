@@ -419,12 +419,12 @@ BEGIN
   END IF;
 
   -- Check if there's already an active invite for this household
-  SELECT invite_token, expires_at, id
+  SELECT hi.invite_token, hi.expires_at, hi.id
   INTO v_invite_token, v_expires_at, v_invite_id
-  FROM household_invitations
-  WHERE household_id = p_household_id
-  AND status = 'pending'
-  AND expires_at > NOW()
+  FROM household_invitations hi
+  WHERE hi.household_id = p_household_id
+  AND hi.status = 'pending'
+  AND hi.expires_at > NOW()
   LIMIT 1;
 
   -- If no active invite exists, create a new one
@@ -453,7 +453,8 @@ BEGIN
     RETURNING id INTO v_invite_id;
   END IF;
 
-  RETURN QUERY SELECT v_invite_token, v_expires_at;
+  -- Return with explicit column names
+  RETURN QUERY SELECT v_invite_token AS invite_code, v_expires_at AS expires_at;
 END;
 $$;
 
