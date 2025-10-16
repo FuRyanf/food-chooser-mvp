@@ -26,6 +26,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          household_id: string | null
           date: string
           restaurant: string | null
           dish: string
@@ -41,6 +42,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          household_id?: string | null
           date: string
           restaurant?: string | null
           dish: string
@@ -56,6 +58,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          household_id?: string | null
           date?: string
           restaurant?: string | null
           dish?: string
@@ -73,6 +76,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          household_id: string | null
           budget_min: number
           budget_max: number
           forbid_repeat_days: number
@@ -84,6 +88,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          household_id?: string | null
           budget_min: number
           budget_max: number
           forbid_repeat_days: number
@@ -95,6 +100,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          household_id?: string | null
           budget_min?: number
           budget_max?: number
           forbid_repeat_days?: number
@@ -108,6 +114,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          household_id: string | null
           cuisine: string
           count: number
           created_at: string
@@ -116,6 +123,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          household_id?: string | null
           cuisine: string
           count: number
           created_at?: string
@@ -124,6 +132,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          household_id?: string | null
           cuisine?: string
           count?: number
           created_at?: string
@@ -134,6 +143,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          household_id: string | null
           restaurant_norm: string
           dish_norm: string
           disabled: boolean
@@ -143,6 +153,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          household_id?: string | null
           restaurant_norm: string
           dish_norm: string
           disabled: boolean
@@ -152,6 +163,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          household_id?: string | null
           restaurant_norm?: string
           dish_norm?: string
           disabled?: boolean
@@ -163,6 +175,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          household_id: string | null
           date: string
           amount: number
           notes: string | null
@@ -174,6 +187,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          household_id?: string | null
           date: string
           amount: number
           notes?: string | null
@@ -185,6 +199,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          household_id?: string | null
           date?: string
           amount?: number
           notes?: string | null
