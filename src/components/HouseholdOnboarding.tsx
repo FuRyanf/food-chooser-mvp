@@ -76,15 +76,15 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
   if (mode === 'choice') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
           {/* Header */}
           <div className="text-center">
-            <div className="text-6xl mb-4">🏠</div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🏠</div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               Welcome to FuDi!
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Let's set up your household to start tracking meals and expenses together.
             </p>
           </div>
@@ -93,28 +93,28 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
           <div className="space-y-3">
             <button
               onClick={() => setMode('create')}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-6 rounded-xl transition-colors flex items-center justify-between group"
+              className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-semibold py-3.5 sm:py-4 px-5 sm:px-6 rounded-lg sm:rounded-xl transition-colors flex items-center justify-between group min-h-[56px]"
             >
-              <span className="flex items-center gap-3">
-                <span className="text-2xl">✨</span>
-                <span>Create New Household</span>
+              <span className="flex items-center gap-2 sm:gap-3">
+                <span className="text-xl sm:text-2xl">✨</span>
+                <span className="text-sm sm:text-base">Create New Household</span>
               </span>
-              <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
+              <span className="text-lg sm:text-xl group-hover:translate-x-1 transition-transform">→</span>
             </button>
 
             <button
               onClick={handleJoinInstructions}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-xl transition-colors flex items-center justify-between group"
+              className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-3.5 sm:py-4 px-5 sm:px-6 rounded-lg sm:rounded-xl transition-colors flex items-center justify-between group min-h-[56px]"
             >
-              <span className="flex items-center gap-3">
-                <span className="text-2xl">👥</span>
-                <span>Join Existing Household</span>
+              <span className="flex items-center gap-2 sm:gap-3">
+                <span className="text-xl sm:text-2xl">👥</span>
+                <span className="text-sm sm:text-base">Join Existing Household</span>
               </span>
-              <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
+              <span className="text-lg sm:text-xl group-hover:translate-x-1 transition-transform">→</span>
             </button>
           </div>
 
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 text-center">
             You can only belong to one household at a time
           </p>
         </div>
@@ -124,23 +124,23 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
 
   if (mode === 'create') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
           {/* Header */}
           <div className="text-center">
-            <div className="text-6xl mb-4">✨</div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">✨</div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
               Create Your Household
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Choose a name for your household. You can invite others later!
             </p>
           </div>
 
           {/* Form */}
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Household Name
               </label>
               <input
@@ -148,14 +148,14 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
                 value={householdName}
                 onChange={(e) => setHouseholdName(e.target.value)}
                 placeholder="e.g., The Smith Family, Roommates, etc."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
                 disabled={loading}
                 autoFocus
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-xs sm:text-sm">
                 {error}
               </div>
             )}
@@ -163,7 +163,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             <button
               onClick={handleCreateHousehold}
               disabled={loading || !householdName.trim()}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+              className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-2.5 sm:py-3 px-5 sm:px-6 rounded-lg transition-colors min-h-[44px] text-sm sm:text-base"
             >
               {loading ? 'Creating...' : 'Create Household'}
             </button>
@@ -171,7 +171,7 @@ export default function HouseholdOnboarding({ userId, onComplete }: HouseholdOnb
             <button
               onClick={() => setMode('choice')}
               disabled={loading}
-              className="w-full text-gray-600 hover:text-gray-800 font-medium py-2 transition-colors"
+              className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium py-2 transition-colors min-h-[44px] text-sm sm:text-base"
             >
               ← Back
             </button>

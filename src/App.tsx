@@ -1263,9 +1263,9 @@ function MainApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-100 px-4 pb-16 pt-6 text-zinc-900 transition-colors duration-300 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950 dark:text-zinc-100 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-10">
-        <header className="overflow-hidden rounded-[2.25rem] border border-white/60 bg-white/70 px-6 py-7 shadow-2xl shadow-amber-200/30 backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/70 dark:shadow-emerald-500/10 md:px-10 md:py-10">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-emerald-100 px-3 sm:px-4 pb-16 pt-4 sm:pt-6 text-zinc-900 transition-colors duration-300 dark:from-zinc-950 dark:via-zinc-900 dark:to-emerald-950 dark:text-zinc-100 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6 sm:space-y-10">
+        <header className="overflow-hidden rounded-2xl sm:rounded-[2.25rem] border border-white/60 bg-white/70 px-4 sm:px-6 py-5 sm:py-7 shadow-xl sm:shadow-2xl shadow-amber-200/30 backdrop-blur-md dark:border-white/10 dark:bg-zinc-900/70 dark:shadow-emerald-500/10 md:px-10 md:py-10">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -1291,11 +1291,11 @@ function MainApp() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-2 sm:gap-3 grid-cols-3">
                 {quickStats.map((stat) => (
-                  <div key={stat.label} className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
-                    <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{stat.label}</div>
-                    <div className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{stat.value}</div>
+                  <div key={stat.label} className="rounded-lg sm:rounded-2xl border border-white/60 bg-white/80 p-2 sm:p-4 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
+                    <div className="text-[10px] sm:text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{stat.label}</div>
+                    <div className="mt-1 sm:mt-2 text-sm sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100">{stat.value}</div>
                   </div>
                 ))}
               </div>
@@ -1338,8 +1338,8 @@ function MainApp() {
                   <span>{language === 'en' ? '中文' : 'EN'}</span>
                 </button>
               </div>
-              <nav className="rounded-3xl border border-white/60 bg-white/80 p-2 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between">
+              <nav className="rounded-2xl sm:rounded-3xl border border-white/60 bg-white/80 p-1.5 sm:p-2 shadow-inner shadow-amber-100/40 backdrop-blur-sm dark:border-white/10 dark:bg-zinc-900/70">
+                <div className="flex flex-col gap-1.5 sm:gap-2">
                   {navButtons.map((nav) => {
                     const Icon = nav.icon;
                     const active = activeTab === nav.key;
@@ -1348,18 +1348,18 @@ function MainApp() {
                         key={nav.key}
                         type="button"
                         onClick={() => setActiveTab(nav.key)}
-                        className={`flex flex-1 items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:focus-visible:ring-emerald-300 ${
+                        className={`flex flex-1 items-center gap-2 sm:gap-3 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:focus-visible:ring-emerald-300 min-h-[56px] ${
                           active
                             ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-400/40'
-                            : 'hover:bg-white/70 dark:hover:bg-zinc-800/70'
+                            : 'hover:bg-white/70 active:bg-white dark:hover:bg-zinc-800/70 dark:active:bg-zinc-800'
                         }`}
                       >
-                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-2xl border ${active ? 'border-white/30 bg-white/20 text-white' : 'border-emerald-200 bg-emerald-100 text-emerald-600 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
-                          <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-inherit'}`} />
+                        <span className={`inline-flex h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border ${active ? 'border-white/30 bg-white/20 text-white' : 'border-emerald-200 bg-emerald-100 text-emerald-600 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+                          <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${active ? 'text-white' : 'text-inherit'}`} />
                         </span>
-                        <span className="flex flex-col">
-                          <span className="font-semibold">{nav.label}</span>
-                          <span className={`text-xs ${active ? 'text-emerald-100' : 'text-zinc-500 dark:text-zinc-400'}`}>{nav.description}</span>
+                        <span className="flex flex-col flex-1 min-w-0">
+                          <span className="font-semibold text-sm sm:text-base truncate">{nav.label}</span>
+                          <span className={`text-[11px] sm:text-xs truncate ${active ? 'text-emerald-100' : 'text-zinc-500 dark:text-zinc-400'}`}>{nav.description}</span>
                         </span>
                       </button>
                     );

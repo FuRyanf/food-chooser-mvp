@@ -119,11 +119,11 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
 
   if (loading || authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8">
           <div className="flex flex-col items-center gap-4">
-            <Loader className="w-12 h-12 text-blue-500 animate-spin" />
-            <p className="text-gray-600">
+            <Loader className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500 animate-spin" />
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               {authLoading ? 'Loading your account...' : 'Loading invitation...'}
             </p>
           </div>
@@ -172,15 +172,15 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-xl sm:rounded-2xl shadow-xl p-6 sm:p-8 space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="text-center">
-          <UserPlus className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <UserPlus className="w-14 h-14 sm:w-16 sm:h-16 text-blue-500 mx-auto mb-3 sm:mb-4" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             You're Invited!
           </h1>
-          <p className="text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Join <strong>{inviteInfo?.household_name}</strong>
           </p>
         </div>

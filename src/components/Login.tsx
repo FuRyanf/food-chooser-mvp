@@ -21,33 +21,33 @@ export function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full animate-fade-in">
+      <div className="bg-white dark:bg-zinc-900 p-6 sm:p-8 rounded-xl sm:rounded-2xl shadow-2xl max-w-md w-full animate-fade-in">
         {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex justify-center mb-3 sm:mb-4">
             <div className="relative">
-              <div className="text-6xl">🍜</div>
-              <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-yellow-500 animate-pulse" />
+              <div className="text-5xl sm:text-6xl">🍜</div>
+              <Sparkles className="absolute -top-1 sm:-top-2 -right-1 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 animate-pulse" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">FuDi</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-2">FuDi</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Your personalized meal companion
           </p>
         </div>
 
         {/* Features List */}
-        <div className="mb-8 space-y-3">
-          <div className="flex items-center gap-3 text-sm text-gray-700">
-            <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+        <div className="mb-6 sm:mb-8 space-y-2.5 sm:space-y-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-500 rounded-full flex-shrink-0"></div>
             <span>Gacha egg surprise meals</span>
           </div>
-          <div className="flex items-center gap-3 text-sm text-gray-700">
-            <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+          <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-pink-500 rounded-full flex-shrink-0"></div>
             <span>Track spending & preferences</span>
           </div>
-          <div className="flex items-center gap-3 text-sm text-gray-700">
-            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+          <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
             <span>Share with your household</span>
           </div>
         </div>
@@ -56,9 +56,9 @@ export function Login() {
         <button
           onClick={handleSignIn}
           disabled={loading || isSigningIn}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 rounded-lg px-6 py-3 text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-400 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2.5 sm:gap-3 bg-white dark:bg-zinc-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg px-5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-zinc-700 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
         >
-          <svg className="w-5 h-5" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -81,20 +81,20 @@ export function Login() {
 
         {/* Error Message */}
         {error && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700 text-center">{error}</p>
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-xs sm:text-sm text-red-700 dark:text-red-400 text-center">{error}</p>
           </div>
         )}
 
         {/* Footer */}
-        <p className="text-xs text-gray-500 text-center mt-6">
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 text-center mt-5 sm:mt-6 leading-relaxed">
           By signing in, you agree to share meals and preferences with your household members
         </p>
 
         {/* Fun Loading State */}
         {(loading || isSigningIn) && (
-          <div className="mt-4 flex justify-center">
-            <div className="animate-spin text-2xl">🥢</div>
+          <div className="mt-3 sm:mt-4 flex justify-center">
+            <div className="animate-spin text-xl sm:text-2xl">🥢</div>
           </div>
         )}
       </div>

@@ -7,17 +7,25 @@
 
 body { @apply min-h-screen bg-zinc-100 text-zinc-900 transition-colors duration-300 dark:bg-zinc-950 dark:text-zinc-100; }
 
-.card { @apply rounded-2xl bg-white shadow border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800; }
-.btn { @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition; }
-.btn-primary { @apply btn bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700; }
-.btn-ghost { @apply btn hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800; }
-.btn-outline { @apply btn border border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800; }
+/* Mobile-optimized components */
+.card { @apply rounded-xl sm:rounded-2xl bg-white shadow border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium transition min-h-[44px] touch-manipulation; }
+.btn-primary { @apply btn bg-zinc-900 text-white hover:bg-zinc-800 active:bg-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:active:bg-zinc-600; }
+.btn-ghost { @apply btn hover:bg-zinc-100 active:bg-zinc-200 dark:text-zinc-100 dark:hover:bg-zinc-800 dark:active:bg-zinc-700; }
+.btn-outline { @apply btn border border-zinc-200 hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800 dark:active:bg-zinc-700; }
 .badge { @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs dark:border-zinc-700; }
-.input { @apply w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-600; }
+.input { @apply w-full rounded-lg sm:rounded-xl border border-zinc-300 bg-white px-3 sm:px-4 py-2.5 sm:py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-600 touch-manipulation; }
 .select { @apply input; }
-.label { @apply text-xs font-medium text-zinc-600 dark:text-zinc-400; }
-.table { @apply w-full text-sm; }
-.th, .td { @apply px-3 py-2 border-b dark:border-zinc-800; }
+.label { @apply text-xs sm:text-sm font-medium text-zinc-600 dark:text-zinc-400; }
+.table { @apply w-full text-xs sm:text-sm; }
+.th, .td { @apply px-2 sm:px-3 py-2 border-b dark:border-zinc-800; }
+
+/* Mobile scrolling improvements */
+@supports (-webkit-overflow-scrolling: touch) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
 
 .dark .text-zinc-600 { color: rgb(161 161 170); }
 .dark .text-zinc-500 { color: rgb(113 113 122); }

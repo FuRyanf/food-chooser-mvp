@@ -254,11 +254,11 @@ export function HouseholdSettings() {
   const isLastMember = members.length === 1
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <Users className="w-6 h-6" />
+        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+          <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           Household Settings
         </h2>
       </div>
@@ -282,23 +282,23 @@ export function HouseholdSettings() {
       )}
 
       {/* Household Name */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <label className="block text-sm font-medium mb-2 text-gray-700">
+      <div className="bg-white dark:bg-zinc-900 p-4 sm:p-6 rounded-lg shadow">
+        <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
           Household Name
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={newHouseholdName}
             onChange={(e) => setNewHouseholdName(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
             placeholder="My Family"
             disabled={loading}
           />
           <button
             onClick={updateHouseholdName}
             disabled={loading || newHouseholdName === householdName}
-            className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 sm:px-6 py-2.5 sm:py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 active:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-h-[44px]"
           >
             Save
           </button>
@@ -307,31 +307,31 @@ export function HouseholdSettings() {
 
       {/* Invite Members */}
       {isOwner && (
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-lg border border-blue-200">
-          <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-            <Mail className="w-5 h-5" />
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-4 sm:p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+            <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
             Invite Members
           </h3>
-          <p className="text-sm text-blue-700 mb-4">
+          <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-200 mb-3 sm:mb-4">
             Generate an invite link and share it manually
           </p>
-          <div className="flex gap-2 mb-3">
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <input
               type="email"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="friend@example.com (optional - for tracking)"
-              className="flex-1 px-4 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              placeholder="friend@example.com (optional)"
+              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-2 border border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-blue-950/50 text-gray-900 dark:text-gray-100 text-sm sm:text-base"
               disabled={loading}
               onKeyPress={(e) => e.key === 'Enter' && sendInvite()}
             />
             <button
               onClick={sendInvite}
               disabled={loading}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+              className="px-4 sm:px-6 py-2.5 sm:py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 whitespace-nowrap min-h-[44px]"
             >
-              <Send className="w-4 h-4" />
-              {loading ? 'Creating...' : 'Generate Link'}
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="text-sm sm:text-base">{loading ? 'Creating...' : 'Generate Link'}</span>
             </button>
           </div>
           <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-100">
