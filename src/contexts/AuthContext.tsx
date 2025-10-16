@@ -30,12 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     
-    // Add timeout to prevent infinite loading
+    // Add timeout to prevent infinite loading (reduced to 3 seconds)
     const timeoutId = setTimeout(() => {
-      console.error('⏱️ Auth loading timeout - forcing load complete')
-      console.log('⚠️ You can still use the app, but household features may not work')
+      console.error('⏱️ Auth loading timeout after 3s - showing onboarding')
+      setNeedsOnboarding(true)
       setLoading(false)
-    }, 5000) // 5 second timeout
+    }, 3000) // 3 second timeout
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -102,12 +102,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`🔍 Fetching household for user: ${userId}`)
       
-      // Simple, fast query - just check household_members
-      const { data: memberData, error: memberError } = await supabase
+      // Race the query against a 2-second timeout
+      const queryPromise = supabase
         .from('household_members')
         .select('household_id')
         .eq('user_id', userId)
         .maybeSingle()
+      
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout')), 2000)
+      )
+      
+      const { data: memberData, error: memberError } = await Promise.race([
+        queryPromise,
+        timeoutPromise
+      ]).catch(err => {
+        console.warn('⏱️ Query timed out or failed:', err.message)
+        return { data: null, error: err }
+      })
       
       // If query fails or no household found, show onboarding
       if (memberError || !memberData?.household_id) {
@@ -122,12 +134,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const householdId = memberData.household_id
       console.log('✅ Found household ID:', householdId)
       
-      // Fetch household details
-      const { data: householdData, error: householdError } = await supabase
+      // Fetch household details with timeout
+      const householdQueryPromise = supabase
         .from('households')
         .select('id, name')
         .eq('id', householdId)
         .single()
+      
+      const householdTimeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Household query timeout')), 2000)
+      )
+      
+      const { data: householdData, error: householdError } = await Promise.race([
+        householdQueryPromise,
+        householdTimeoutPromise
+      ]).catch(err => {
+        console.warn('⏱️ Household query timed out or failed:', err.message)
+        return { data: null, error: err }
+      })
 
       if (householdError || !householdData) {
         console.warn('⚠️ Household details not found, using defaults')
