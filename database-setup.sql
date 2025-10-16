@@ -562,19 +562,20 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    hi.id AS invite_id,
-    hi.household_id AS household_id,
-    h.name AS household_name,
-    u.email::text AS inviter_email,
-    hi.status AS status,
-    hi.created_at AS created_at,
-    hi.expires_at AS expires_at
+    hi.id,
+    hi.household_id,
+    h.name,
+    u.email::text,
+    hi.status,
+    hi.created_at,
+    hi.expires_at
   FROM household_invitations hi
   JOIN households h ON h.id = hi.household_id
   LEFT JOIN auth.users u ON u.id = hi.inviter_id
-  WHERE UPPER(hi.invite_token) = UPPER(p_invite_code)
+  WHERE UPPER(RIGHT(TRIM(hi.invite_token), 6)) = UPPER(RIGHT(TRIM(p_invite_code), 6))
   AND hi.status = 'pending'
-  AND hi.expires_at > NOW();
+  AND hi.expires_at > NOW()
+  LIMIT 1;
 END;
 $$;
 

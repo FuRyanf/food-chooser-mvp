@@ -426,27 +426,28 @@ export function HouseholdSettings() {
 
       {/* Invite Members */}
       {isOwner && (
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-4 sm:p-6 rounded-lg border border-blue-200 dark:border-blue-800">
-          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
+          <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5" />
             Invite Members
           </h3>
           
           {inviteCode ? (
             <div className="space-y-4">
               {/* Code Display */}
-              <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4 text-center">
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Invite Code:</p>
-                <div className="text-3xl font-bold tracking-widest text-blue-600 dark:text-blue-400 font-mono mb-3">
-                  {inviteCode}
+              <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Invite Code:</p>
+                <div className="text-4xl font-bold tracking-[0.5em] text-blue-600 dark:text-blue-400 font-mono mb-4">
+                  {inviteCode.slice(-6).toUpperCase()}
                 </div>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(inviteCode)
+                    const code = inviteCode.slice(-6).toUpperCase()
+                    navigator.clipboard.writeText(code)
                     setSuccess('Code copied to clipboard!')
                     setTimeout(() => setSuccess(null), 2000)
                   }}
-                  className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+                  className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm"
                 >
                   📋 Copy Code
                 </button>
@@ -454,13 +455,13 @@ export function HouseholdSettings() {
 
               {/* Link Display */}
               <div className="bg-white dark:bg-blue-950/50 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Or share this link:</p>
-                <div className="flex gap-2">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Or share this link:</p>
+                <div className="space-y-3">
                   <input
                     type="text"
                     value={`${window.location.origin}/invite/${inviteCode}`}
                     readOnly
-                    className="flex-1 px-3 py-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono"
+                    className="w-full px-3 py-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-mono"
                   />
                   <button
                     onClick={() => {
@@ -468,33 +469,36 @@ export function HouseholdSettings() {
                       setSuccess('Link copied to clipboard!')
                       setTimeout(() => setSuccess(null), 2000)
                     }}
-                    className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm"
                   >
                     📋 Copy Link
                   </button>
                 </div>
               </div>
 
-              <p className="text-xs text-blue-700 dark:text-blue-200">
-                💡 Code and link expire in 7 days. Can be used by multiple people.
-              </p>
+              <div className="bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                <p className="text-xs text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                  <span className="text-base">💡</span>
+                  <span>Code and link expire in 7 days. Can be used by multiple people.</span>
+                </p>
+              </div>
               
               <button
                 onClick={() => setInviteCode(null)}
-                className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2"
+                className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 ← Hide
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-200">
+              <p className="text-sm text-blue-700 dark:text-blue-200">
                 Generate a simple code to invite people to your household
               </p>
               <button
                 onClick={generateInviteCode}
                 disabled={loading}
-                className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold"
+                className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-sm"
               >
                 <Send className="w-4 h-4" />
                 {loading ? 'Generating...' : 'Generate Invite Code'}
