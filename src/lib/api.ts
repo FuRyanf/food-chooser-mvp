@@ -187,17 +187,22 @@ export class FoodChooserAPI {
     // Get current user
     const { data: { user } } = await supabase!.auth.getUser()
     if (!user) {
+      console.error('❌ User not authenticated')
       throw new Error('User not authenticated')
     }
+    
+    console.log('💾 Saving preferences for:', { userId: user.id, householdId, prefs })
     
     const now = new Date().toISOString()
     const prefsData: UserPreferencesInsert = {
       ...prefs,
       household_id: householdId,
-      user_id: user.id,  // ✅ Use actual user ID, not household ID
+      user_id: user.id,
       created_at: now,
       updated_at: now
     }
+
+    console.log('📤 Upserting data:', prefsData)
 
     const { data, error } = await supabase!
       .from('user_preferences')
@@ -206,10 +211,17 @@ export class FoodChooserAPI {
       .single()
 
     if (error) {
-      console.error('Error upserting user preferences:', error)
-      throw error
+      console.error('❌ Error upserting user preferences:', {
+        error,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      throw new Error(`Failed to save preferences: ${error.message}`)
     }
 
+    console.log('✅ Preferences saved successfully:', data)
     return data
   }
 
