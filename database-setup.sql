@@ -205,46 +205,30 @@ DROP POLICY IF EXISTS "Owners can create invitations" ON household_invitations;
 
 -- RLS Policies for meals
 CREATE POLICY "Users can view meals in their household" ON meals
-  FOR SELECT USING (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid()
-    )
-  );
+  FOR SELECT USING (household_id = get_user_household_id());
 
 CREATE POLICY "Users can insert meals in their household" ON meals
-  FOR INSERT WITH CHECK (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid()
-    )
-  );
+  FOR INSERT WITH CHECK (household_id = get_user_household_id());
 
 CREATE POLICY "Users can update meals in their household" ON meals
-  FOR UPDATE USING (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid()
-    )
-  );
+  FOR UPDATE USING (household_id = get_user_household_id());
 
 CREATE POLICY "Users can delete meals in their household" ON meals
-  FOR DELETE USING (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid()
-    )
-  );
+  FOR DELETE USING (household_id = get_user_household_id());
 
 -- RLS Policies for groceries (same pattern)
 CREATE POLICY "Users can view groceries in their household" ON groceries
-  FOR SELECT USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Users can insert groceries in their household" ON groceries
-  FOR INSERT WITH CHECK (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR INSERT WITH CHECK (household_id = get_user_household_id());
 CREATE POLICY "Users can update groceries in their household" ON groceries
-  FOR UPDATE USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR UPDATE USING (household_id = get_user_household_id());
 CREATE POLICY "Users can delete groceries in their household" ON groceries
-  FOR DELETE USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR DELETE USING (household_id = get_user_household_id());
 
 -- RLS Policies for user_preferences
 CREATE POLICY "Users can view preferences in their household" ON user_preferences
-  FOR SELECT USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Users can insert their own preferences" ON user_preferences
   FOR INSERT WITH CHECK (user_id::uuid = auth.uid());
 CREATE POLICY "Users can update their own preferences" ON user_preferences
@@ -254,33 +238,29 @@ CREATE POLICY "Users can delete their own preferences" ON user_preferences
 
 -- RLS Policies for cuisine_overrides
 CREATE POLICY "Users can view overrides in their household" ON cuisine_overrides
-  FOR SELECT USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Users can manage overrides in their household" ON cuisine_overrides
-  FOR ALL USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR ALL USING (household_id = get_user_household_id());
 
 -- RLS Policies for disabled_items
 CREATE POLICY "Users can view disabled items in their household" ON disabled_items
-  FOR SELECT USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Users can manage disabled items in their household" ON disabled_items
-  FOR ALL USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR ALL USING (household_id = get_user_household_id());
 
 -- RLS Policies for households
 CREATE POLICY "Users can view their own household" ON households
-  FOR SELECT USING (id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (id = get_user_household_id());
 CREATE POLICY "Users can update their own household" ON households
-  FOR UPDATE USING (id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR UPDATE USING (id = get_user_household_id());
 
 -- RLS Policies for household_members
 CREATE POLICY "Users can view members of their household" ON household_members
-  FOR SELECT USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid()));
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Users can insert themselves as members" ON household_members
   FOR INSERT WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Owners can manage members" ON household_members
-  FOR ALL USING (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid() AND role = 'owner'
-    )
-  );
+  FOR ALL USING (user_is_household_owner(household_id));
 
 -- RLS Policies for profiles
 CREATE POLICY "Users can view own profile" ON public.profiles
@@ -292,15 +272,9 @@ CREATE POLICY "Users can update own profile" ON public.profiles
 
 -- RLS Policies for household_invitations
 CREATE POLICY "Users can view invitations for their household" ON household_invitations
-  FOR SELECT USING (
-    household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid())
-  );
+  FOR SELECT USING (household_id = get_user_household_id());
 CREATE POLICY "Owners can create invitations" ON household_invitations
-  FOR INSERT WITH CHECK (
-    household_id IN (
-      SELECT household_id FROM household_members WHERE user_id = auth.uid() AND role = 'owner'
-    )
-  );
+  FOR INSERT WITH CHECK (user_is_household_owner(household_id));
 
 -- ============================================
 -- PART 7: TRIGGERS
@@ -380,6 +354,48 @@ DROP FUNCTION IF EXISTS accept_household_invite(TEXT);
 DROP FUNCTION IF EXISTS get_invite_info(TEXT);
 DROP FUNCTION IF EXISTS get_household_invites(UUID);
 DROP FUNCTION IF EXISTS leave_household();
+DROP FUNCTION IF EXISTS get_user_household_id();
+DROP FUNCTION IF EXISTS user_is_household_owner(UUID);
+
+-- Helper function to get user's household_id (bypasses RLS)
+CREATE OR REPLACE FUNCTION get_user_household_id()
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_household_id UUID;
+BEGIN
+  SELECT household_id INTO v_household_id
+  FROM household_members
+  WHERE user_id = auth.uid()
+  LIMIT 1;
+  
+  RETURN v_household_id;
+END;
+$$;
+
+-- Helper function to check if user is owner of a household (bypasses RLS)
+CREATE OR REPLACE FUNCTION user_is_household_owner(p_household_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_is_owner BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM household_members
+    WHERE user_id = auth.uid()
+    AND household_id = p_household_id
+    AND role = 'owner'
+  ) INTO v_is_owner;
+  
+  RETURN v_is_owner;
+END;
+$$;
 
 -- Function to get user's household
 CREATE OR REPLACE FUNCTION get_user_household(p_user_id UUID)
