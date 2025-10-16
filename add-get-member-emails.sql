@@ -22,7 +22,7 @@ BEGIN
     hm.user_id,
     hm.role,
     hm.joined_at,
-    COALESCE(u.email, 'No email') as email
+    COALESCE(u.email::text, 'No email') as email
   FROM household_members hm
   LEFT JOIN auth.users u ON u.id = hm.user_id
   WHERE hm.household_id = p_household_id
