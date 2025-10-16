@@ -51,20 +51,29 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
 
     try {
       setLoading(true)
+      
+      // RPC returns a TABLE, so we need to handle it as an array
       const { data, error } = await supabase
         .rpc('get_invite_info', { p_invite_token: inviteToken })
+      
+      console.log('📊 Invite info response:', { data, error })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ RPC error:', error)
+        throw error
+      }
 
-      if (!data || data.length === 0) {
+      // Data should be an array from the TABLE return type
+      if (!data || !Array.isArray(data) || data.length === 0) {
         setError('Invalid or expired invitation link')
         setLoading(false)
         return
       }
 
+      console.log('✅ Invite info loaded:', data[0])
       setInviteInfo(data[0])
     } catch (err: any) {
-      console.error('Error fetching invite info:', err)
+      console.error('💥 Error fetching invite info:', err)
       setError(err.message || 'Failed to load invitation')
     } finally {
       setLoading(false)
@@ -90,16 +99,25 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
       setAccepting(true)
       setError('')
 
+      console.log('🔄 Calling accept_household_invite RPC...')
       const { data, error } = await supabase
         .rpc('accept_household_invite', {
           p_invite_token: inviteToken,
           p_user_id: user.id
         })
 
-      if (error) throw error
+      console.log('📊 Accept invite response:', { data, error })
 
-      if (data && data.length > 0) {
+      if (error) {
+        console.error('❌ RPC error:', error)
+        throw error
+      }
+
+      // Data should be an array from the TABLE return type
+      if (data && Array.isArray(data) && data.length > 0) {
         const result = data[0]
+        console.log('✅ Invite acceptance result:', result)
+        
         if (result.success) {
           setSuccess(result.message || 'Successfully joined household!')
           setTimeout(() => {
@@ -108,9 +126,11 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
         } else {
           throw new Error(result.message || 'Failed to accept invitation')
         }
+      } else {
+        throw new Error('Invalid response from server')
       }
     } catch (err: any) {
-      console.error('Error accepting invite:', err)
+      console.error('💥 Error accepting invite:', err)
       setError(err.message || 'Failed to accept invitation')
     } finally {
       setAccepting(false)
