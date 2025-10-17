@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useProfile } from '../contexts/ProfileContext'
 import { supabase } from '../lib/supabase'
 import { Users, Crown, Trash2, Send, CheckCircle, XCircle, LogOut, AlertCircle, User } from 'lucide-react'
+import { useI18n } from '../lib/i18n'
 
 interface HouseholdMember {
   id: string
@@ -13,6 +14,7 @@ interface HouseholdMember {
 }
 
 export function HouseholdSettings() {
+  const { t, tt } = useI18n()
   const { householdId, householdName, user, refreshHousehold, signOut } = useAuth()
   const { displayName, updateDisplayName, loading: profileLoading } = useProfile()
   const [members, setMembers] = useState<HouseholdMember[]>([])
@@ -78,7 +80,7 @@ export function HouseholdSettings() {
 
   const updateHouseholdName = async () => {
     if (!householdId || !newHouseholdName.trim() || !supabase) {
-      setError('Household name cannot be empty')
+      setError(t('Household name cannot be empty'))
       return
     }
 
@@ -93,7 +95,7 @@ export function HouseholdSettings() {
 
       if (error) throw error
 
-      setSuccess('Household name updated!')
+      setSuccess(t('Household name updated!'))
       setTimeout(() => setSuccess(null), 3000)
       await refreshHousehold()
     } catch (err) {
@@ -221,7 +223,7 @@ export function HouseholdSettings() {
 
   const handleUpdateProfile = async () => {
     if (!newDisplayName.trim()) {
-      setProfileError('Please enter a name')
+      setProfileError(t('Please enter a name'))
       return
     }
 
@@ -231,11 +233,11 @@ export function HouseholdSettings() {
 
     try {
       await updateDisplayName(newDisplayName.trim())
-      setProfileSuccess('Profile updated successfully!')
+      setProfileSuccess(t('Profile updated successfully!'))
       setTimeout(() => setProfileSuccess(null), 3000)
     } catch (err: any) {
       console.error('Error updating profile:', err)
-      setProfileError(err.message || 'Failed to update profile')
+      setProfileError(err.message || t('Failed to update profile'))
     } finally {
       setLoading(false)
     }
@@ -243,12 +245,12 @@ export function HouseholdSettings() {
 
   const handleSwitchHousehold = async () => {
     if (!switchCode.trim()) {
-      setError('Please enter an invite code')
+      setError(t('Please enter an invite code'))
       return
     }
 
     if (!supabase) {
-      setError('Database connection not available')
+      setError(t('Database connection not available'))
       return
     }
 
@@ -266,17 +268,17 @@ export function HouseholdSettings() {
       if (data && data.length > 0) {
         const result = data[0]
         if (result.success) {
-          setSuccess(`Switched to ${result.household_name}!`)
+          setSuccess(tt('Switched to {household_name}!', { household_name: result.household_name }))
           setTimeout(() => {
             window.location.reload()
           }, 1500)
         } else {
-          setError(result.message || 'Failed to switch households')
+          setError(result.message || t('Failed to switch households'))
         }
       }
     } catch (err: any) {
       console.error('Error switching household:', err)
-      setError(err.message || 'Failed to switch households')
+      setError(err.message || t('Failed to switch households'))
     } finally {
       setLoading(false)
     }

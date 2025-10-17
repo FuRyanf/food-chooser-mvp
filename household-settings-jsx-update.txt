@@ -1,0 +1,48 @@
+// This file contains the search/replace pairs for HouseholdSettings.tsx translations
+
+// Line ~80: updateHouseholdName error message
+OLD: setError('Failed to update household name')
+NEW: setError(t('Failed to update household name'))
+
+// Line ~196: leave household error message  
+OLD: throw new Error(data?.[0]?.message || 'Failed to leave household')
+NEW: throw new Error(data?.[0]?.message || t('Failed to leave household'))
+
+// Line ~210: leave household error
+OLD: setError(err.message || 'Failed to leave household')
+NEW: setError(err.message || t('Failed to leave household'))
+
+// Line ~218: copy invite link success
+OLD: setSuccess('Invite link copied to clipboard!')
+NEW: setSuccess(t('Invite link copied to clipboard!'))
+
+// Line ~292-299: Header
+OLD: <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-gray-100">
+      <Users className="w-6 h-6" />
+      Household Settings
+    </h2>
+    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+      Manage your profile, household, and members
+    </p>
+
+NEW: <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-gray-100">
+      <Users className="w-6 h-6" />
+      {t('Household Settings')}
+    </h2>
+    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+      {t('Manage your profile, household, and members')}
+    </p>
+
+// Line ~323-326: Your Profile header
+OLD: <h3 className="font-semibold text-gray-900 dark:text-gray-100">Your Profile</h3>
+    </div>
+    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+      Defaults as "Who paid?" in entries
+
+NEW: <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('Your Profile')}</h3>
+    </div>
+    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+      {t('Defaults as "Who paid?" in entries')}
+
+// And so on for all other text...
+

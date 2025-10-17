@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   strict_budget BOOLEAN NOT NULL DEFAULT true,
   monthly_budget NUMERIC(10, 2),
   annual_travel_budget NUMERIC(10, 2),
+  tier_bronze_max NUMERIC(10, 2) DEFAULT 15,
+  tier_silver_max NUMERIC(10, 2) DEFAULT 30,
+  tier_gold_max NUMERIC(10, 2) DEFAULT 55,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
