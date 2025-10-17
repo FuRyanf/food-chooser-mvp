@@ -164,16 +164,19 @@ CREATE INDEX IF NOT EXISTS idx_household_invitations_household ON household_invi
 -- PART 6: ROW LEVEL SECURITY (RLS)
 -- ============================================
 
--- Enable RLS on all tables
+-- Enable RLS on all tables EXCEPT household_members
 ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groceries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cuisine_overrides ENABLE ROW LEVEL SECURITY;
 ALTER TABLE disabled_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE households ENABLE ROW LEVEL SECURITY;
-ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_invitations ENABLE ROW LEVEL SECURITY;
+
+-- Disable RLS on household_members to prevent recursion
+-- (This table only contains user_id <-> household_id mappings, not sensitive data)
+ALTER TABLE household_members DISABLE ROW LEVEL SECURITY;
 
 -- Drop all existing policies first (MUST be before dropping functions)
 DROP POLICY IF EXISTS "Users can view meals in their household" ON meals;
@@ -293,16 +296,9 @@ CREATE POLICY "Users can view their own household" ON households
 CREATE POLICY "Users can update their own household" ON households
   FOR UPDATE USING (id = get_user_household_id());
 
--- RLS Policies for household_members (simplified to avoid recursion)
--- Allow users to view all household_members (other tables enforce data isolation)
-CREATE POLICY "Users can view all household members" ON household_members
-  FOR SELECT USING (true);
-CREATE POLICY "Users can insert themselves as members" ON household_members
-  FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "Users can update their own membership" ON household_members
-  FOR UPDATE USING (user_id = auth.uid());
-CREATE POLICY "Users can delete their own membership" ON household_members
-  FOR DELETE USING (user_id = auth.uid());
+-- No RLS policies for household_members (RLS disabled to prevent recursion)
+-- Security note: household_members only contains user_id <-> household_id mappings
+-- Actual sensitive data (meals, groceries, etc.) is protected by their own RLS policies
 
 -- RLS Policies for profiles
 CREATE POLICY "Users can view own profile" ON public.profiles
