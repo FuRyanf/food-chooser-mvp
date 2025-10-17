@@ -592,7 +592,7 @@ BEGIN
   -- Add user to the new household
   INSERT INTO household_members (household_id, user_id, role)
   VALUES (v_household_id, v_user_id, 'member')
-  ON CONFLICT (user_id) DO UPDATE SET household_members.household_id = EXCLUDED.household_id;
+  ON CONFLICT (user_id) DO UPDATE SET household_id = EXCLUDED.household_id;
 
   -- Note: invite remains 'pending' for reuse
   
