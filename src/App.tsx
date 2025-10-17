@@ -1316,13 +1316,13 @@ function MainApp() {
                 </div>
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
-                    <Sparkles className="h-4 w-4" /> {t('Smart, fun meal picker — personalized by mood, budget, and weather.')}
+                    <Sparkles className="h-4 w-4" /> {t('Track & Decide')}
                   </div>
                   <h1 className="text-3xl font-semibold leading-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
-                    {appName} {t('keeps dinner decisions easy')}
+                    {t('Budget tracker that chooses for you')}
                   </h1>
                   <p className="max-w-xl text-sm text-zinc-600 dark:text-zinc-300">
-                    {t("Blend surprise and structure with FuDi's refreshed planner — crack an egg, log meals, and stay on top of shared budgets in one cozy dashboard.")}
+                    {t("Crack an egg to pick a meal, track spending on meals, groceries & travel, and share budgets with your household.")}
                   </p>
                 </div>
               </div>

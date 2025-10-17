@@ -9,12 +9,10 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Mystery picks & logging': { zh: '神秘推薦與紀錄' },
   'Browse your saved meals': { zh: '瀏覽已儲存的餐點' },
   'Track spending & contributions': { zh: '追蹤支出與分擔' },
-  'Smart, fun meal picker — personalized by mood, budget, and weather.': {
-    zh: '聰明又有趣的餐點挑選器，依心情、預算與天氣量身打造。',
-  },
-  'keeps dinner decisions easy': { zh: '讓晚餐選擇變得輕鬆' },
-  "Blend surprise and structure with FuDi's refreshed planner — crack an egg, log meals, and stay on top of shared budgets in one cozy dashboard.": {
-    zh: '在煥然一新的福娣儀表板中融合驚喜與規劃——敲開神秘蛋、記錄餐點並掌握共用預算，一次搞定。',
+  'Track & Decide': { zh: '追蹤與決定' },
+  'Budget tracker that chooses for you': { zh: '幫你做選擇的預算追蹤器' },
+  "Crack an egg to pick a meal, track spending on meals, groceries & travel, and share budgets with your household.": {
+    zh: '敲開神秘蛋選餐點，追蹤餐食、雜貨與旅行支出，與家人共享預算。',
   },
   'New mystery pick ready': { zh: '神秘餐點已準備就緒' },
   'Crack Mystery Egg': { zh: '敲開神秘蛋' },
