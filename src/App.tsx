@@ -434,6 +434,8 @@ function MainApp() {
   const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
   const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
+  const [annualTravelBudgetDraft, setAnnualTravelBudgetDraft] = useState<string>('');
+  const [annualTravelBudgetSaved, setAnnualTravelBudgetSaved] = useState<number | null>(null);
   const quickStats = useMemo(() => [
     {
       label: t('Budget'),
@@ -466,13 +468,15 @@ function MainApp() {
     const maxSaved = String(budgetSaved.max);
     const daysSaved = String(forbidRepeatDaysSaved);
     const mbSaved = monthlyBudgetSaved != null ? String(monthlyBudgetSaved) : '';
+    const atbSaved = annualTravelBudgetSaved != null ? String(annualTravelBudgetSaved) : '';
     return (
       budgetDraft.min.trim() !== minSaved ||
       budgetDraft.max.trim() !== maxSaved ||
       forbidRepeatDaysDraft.trim() !== daysSaved ||
-      monthlyBudgetDraft.trim() !== mbSaved
+      monthlyBudgetDraft.trim() !== mbSaved ||
+      annualTravelBudgetDraft.trim() !== atbSaved
     );
-  }, [budgetDraft, forbidRepeatDaysDraft, monthlyBudgetDraft, budgetSaved, forbidRepeatDaysSaved, monthlyBudgetSaved]);
+  }, [budgetDraft, forbidRepeatDaysDraft, monthlyBudgetDraft, annualTravelBudgetDraft, budgetSaved, forbidRepeatDaysSaved, monthlyBudgetSaved, annualTravelBudgetSaved]);
 
   // Compute egg tier eligibility from saved budget
   const eggEligibility = useMemo(() => {
@@ -529,6 +533,8 @@ function MainApp() {
         setForbidRepeatDaysDraft(String(prefsData.forbid_repeat_days));
         setMonthlyBudgetSaved(prefsData.monthly_budget ?? null);
         setMonthlyBudgetDraft(prefsData.monthly_budget != null ? String(prefsData.monthly_budget) : '');
+        setAnnualTravelBudgetSaved((prefsData as any).annual_travel_budget ?? null);
+        setAnnualTravelBudgetDraft((prefsData as any).annual_travel_budget != null ? String((prefsData as any).annual_travel_budget) : '');
       }
       setOverrides(overridesData);
     } catch (err) {
@@ -545,11 +551,13 @@ function MainApp() {
     const max = Number(budgetDraft.max);
     const days = Number(forbidRepeatDaysDraft);
     const monthlyBudget = monthlyBudgetDraft.trim() ? Number(monthlyBudgetDraft) : null;
+    const annualTravelBudget = annualTravelBudgetDraft.trim() ? Number(annualTravelBudgetDraft) : null;
     if (!isFinite(min) || !isFinite(max)) { setPrefsError(t('Please enter valid numeric min and max.')); return; }
     if (min < 0 || max < 0) { setPrefsError(t('Min and Max must be non-negative.')); return; }
     if (max < min) { setPrefsError(t('Max must be greater than or equal to Min.')); return; }
     if (!Number.isInteger(days) || days < 0 || days > 14) { setPrefsError(t('No repeat within days must be an integer between 0 and 14.')); return; }
     if (monthlyBudget !== null && (!isFinite(monthlyBudget) || monthlyBudget < 0)) { setPrefsError(t('Monthly budget must be a non-negative number.')); return; }
+    if (annualTravelBudget !== null && (!isFinite(annualTravelBudget) || annualTravelBudget < 0)) { setPrefsError(t('Annual travel budget must be a non-negative number.')); return; }
     try {
       setPrefsSaving(true);
       const saved = await FoodChooserAPI.upsertUserPreferences(householdId!, {
@@ -557,11 +565,13 @@ function MainApp() {
         budget_max: max,
         forbid_repeat_days: days,
         strict_budget: true,
-        monthly_budget: monthlyBudget
-      });
+        monthly_budget: monthlyBudget,
+        annual_travel_budget: annualTravelBudget
+      } as any);
       setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
       setMonthlyBudgetSaved(saved.monthly_budget ?? null);
+      setAnnualTravelBudgetSaved((saved as any).annual_travel_budget ?? null);
       setPrefsSavedNotice(t('Preferences saved.'));
     } catch (e) {
       console.error('Failed to save preferences', e);
@@ -632,6 +642,9 @@ function MainApp() {
       .reduce((s,m)=> s+m.cost, 0);
     const groceriesSum = groceries
       .filter(g=> {
+        // Exclude travel entries (those with trip_label)
+        const isTravel = (g.trip_label ?? '').trim().length > 0;
+        if (isTravel) return false;
         // Use local month key for stored ISO dates
         const storedMonthKey = getLocalMonthKey(g.date.slice(0,10));
         return storedMonthKey === nowKey;
@@ -653,8 +666,20 @@ function MainApp() {
     const d = new Date();
     const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     return groceries.filter(g => {
+      // Exclude travel entries (those with trip_label)
+      const isTravel = (g.trip_label ?? '').trim().length > 0;
+      if (isTravel) return false;
       const storedMonthKey = getLocalMonthKey(g.date.slice(0,10));
       return storedMonthKey === ym;
+    }).reduce((s,g)=> s+g.amount, 0);
+  }
+  function totalTravelYear(){
+    const currentYear = new Date().getFullYear();
+    return groceries.filter(g => {
+      const isTravel = (g.trip_label ?? '').trim().length > 0;
+      if (!isTravel) return false;
+      const entryYear = new Date(g.date).getFullYear();
+      return entryYear === currentYear;
     }).reduce((s,g)=> s+g.amount, 0);
   }
   function budgetBarColor(pct: number){
@@ -842,6 +867,7 @@ function MainApp() {
   const [travelNotes, setTravelNotes] = useState<string>('');
   const [travelPurchaserName, setTravelPurchaserName] = useState<string>(displayName || '');
   const [travelSaving, setTravelSaving] = useState<boolean>(false);
+  const [editTravel, setEditTravel] = useState<Grocery | null>(null);
 
   // Update purchaser names when displayName changes
   useEffect(() => {
@@ -1063,6 +1089,48 @@ function MainApp() {
     } catch (e) {
       console.error('Delete grocery failed', e);
       setError('Failed to delete grocery entry');
+    }
+  }
+
+  function startEditTravel(entry: Grocery) {
+    setEditTravel(entry);
+    setTravelDate(entry.date.slice(0, 10));
+    setTravelAmount(entry.amount?.toString() ?? '0');
+    setTravelTag(entry.trip_label ?? '');
+    setTravelNotes(entry.notes ?? '');
+    setTravelPurchaserName(entry.purchaser_name ?? '');
+  }
+
+  async function saveTravelEdit() {
+    if (!editTravel) return;
+    try {
+      const amt = Number(travelAmount) || 0;
+      if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
+      const tag = travelTag.trim();
+      if (!tag) { showToast(t('Add a travel tag first.')); return; }
+      
+      const updated = await FoodChooserAPI.updateGrocery(householdId!, editTravel.id, {
+        date: toLocalISOString(travelDate),
+        amount: amt,
+        notes: travelNotes.trim() || null,
+        trip_label: tag,
+        purchaser_name: travelPurchaserName.trim() || 'Unknown',
+      });
+      
+      setGroceries(prev => prev
+        .map(g => g.id === updated.id ? updated : g)
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      );
+      setEditTravel(null);
+      setTravelDate(todayISO());
+      setTravelAmount('100');
+      setTravelTag('');
+      setTravelNotes('');
+      setTravelPurchaserName(displayName || '');
+      showToast(t('Travel entry updated'));
+    } catch (e) {
+      console.error('Save travel edit failed', e);
+      showToast(t('Failed to update travel entry'));
     }
   }
 
@@ -2384,40 +2452,61 @@ function MainApp() {
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-end gap-2">
+              {editTravel && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    setEditTravel(null);
+                    setTravelDate(todayISO());
+                    setTravelAmount('100');
+                    setTravelTag('');
+                    setTravelNotes('');
+                    setTravelPurchaserName(displayName || '');
+                  }}
+                >
+                  {t('Cancel')}
+                </button>
+              )}
               <button
                 className="btn-primary"
                 disabled={travelSaving}
                 onClick={async () => {
-                  const amt = Number(travelAmount) || 0;
-                  if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
-                  const tag = travelTag.trim();
-                  if (!tag) { showToast(t('Add a travel tag first.')); return; }
-                  try {
+                  if (editTravel) {
                     setTravelSaving(true);
-                    await FoodChooserAPI.addGrocery(householdId!, {
-                      date: toLocalISOString(travelDate),
-                      amount: amt,
-                      notes: travelNotes.trim() || null,
-                      trip_label: tag,
-                      purchaser_name: travelPurchaserName.trim() || 'Unknown'
-                    });
-                    const latest = await FoodChooserAPI.getGroceries(householdId!);
-                    setGroceries(latest);
-                    setTravelAmount('100');
-                    setTravelTag('');
-                    setTravelPurchaserName(displayName || '');
-                    setTravelNotes('');
-                    showToast(t('Travel spend saved'));
-                  } catch (err) {
-                    console.error('Travel save failed', err);
-                    showToast(t('Failed to save travel spend'));
-                  } finally {
+                    await saveTravelEdit();
                     setTravelSaving(false);
+                  } else {
+                    const amt = Number(travelAmount) || 0;
+                    if (amt <= 0) { showToast(t('Enter a valid amount')); return; }
+                    const tag = travelTag.trim();
+                    if (!tag) { showToast(t('Add a travel tag first.')); return; }
+                    try {
+                      setTravelSaving(true);
+                      await FoodChooserAPI.addGrocery(householdId!, {
+                        date: toLocalISOString(travelDate),
+                        amount: amt,
+                        notes: travelNotes.trim() || null,
+                        trip_label: tag,
+                        purchaser_name: travelPurchaserName.trim() || 'Unknown'
+                      });
+                      const latest = await FoodChooserAPI.getGroceries(householdId!);
+                      setGroceries(latest);
+                      setTravelAmount('100');
+                      setTravelTag('');
+                      setTravelPurchaserName(displayName || '');
+                      setTravelNotes('');
+                      showToast(t('Travel spend saved'));
+                    } catch (err) {
+                      console.error('Travel save failed', err);
+                      showToast(t('Failed to save travel spend'));
+                    } finally {
+                      setTravelSaving(false);
+                    }
                   }
                 }}
               >
-                {travelSaving ? t('Saving…') : t('Save Travel Log')}
+                {travelSaving ? t('Saving…') : editTravel ? t('Save Changes') : t('Save Travel Log')}
               </button>
             </div>
           </>
@@ -2535,6 +2624,7 @@ function MainApp() {
                       </td>
                       <td className="td text-center">
                         <div className="flex justify-center gap-1">
+                          <button className="btn-ghost" onClick={()=> startEditTravel(entry)}>{t('Edit')}</button>
                           <button className="btn-ghost" onClick={()=> deleteTravelEntry(entry.id)}>{t('Delete')}</button>
                         </div>
                       </td>
@@ -2628,6 +2718,47 @@ function MainApp() {
                 </div>
               );
             })()}
+            {annualTravelBudgetSaved !== null && annualTravelBudgetSaved > 0 && (() => {
+              const travelSpent = totalTravelYear();
+              const travelRemaining = Math.max(0, annualTravelBudgetSaved - travelSpent);
+              const travelPct = Math.min(100, Math.round((travelSpent / annualTravelBudgetSaved) * 100));
+              return (
+                <div className="mt-5 space-y-3 text-xs">
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 font-semibold">{t('Annual Travel Budget')}</div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className={glassCardClass}>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Total')}</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(annualTravelBudgetSaved)}</div>
+                    </div>
+                    <div className={glassCardClass}>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Spent YTD')}</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-900 dark:text-zinc-100">{currency(travelSpent)}</div>
+                      <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                        {new Date().getFullYear()}
+                      </div>
+                    </div>
+                    <div className={glassCardClass}>
+                      <div className="text-zinc-600 dark:text-zinc-300">{t('Remaining')}</div>
+                      <div className={`mt-1 text-base font-semibold ${travelSpent > annualTravelBudgetSaved ? 'text-red-600 dark:text-red-300' : 'text-sky-700 dark:text-sky-200'}`}>
+                        {currency(Math.max(0, travelRemaining))}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+                      <span>{t('Usage')}</span>
+                      <span>{travelPct}%</span>
+                    </div>
+                    <div className="mt-1 h-2 w-full rounded bg-zinc-200 dark:bg-zinc-800 relative overflow-hidden">
+                      <div className={`absolute left-0 top-0 h-2 ${budgetBarColor(travelPct)}`} style={{ width: `${travelPct}%` }} />
+                    </div>
+                    <div className="mt-1 flex justify-end gap-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-sky-500"></span> {t('Travel')}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className={`${panelClass} space-y-4`}>
@@ -2645,6 +2776,12 @@ function MainApp() {
             <div className="mb-3">
               <div className="label">{t('Monthly budget')}</div>
               <input className="input" type="number" placeholder="e.g., 600" value={monthlyBudgetDraft} onChange={e => setMonthlyBudgetDraft(e.target.value)} />
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('For meals & groceries only (excludes travel)')}</p>
+            </div>
+            <div className="mb-3">
+              <div className="label">{t('Annual travel budget')}</div>
+              <input className="input" type="number" placeholder="e.g., 5000" value={annualTravelBudgetDraft} onChange={e => setAnnualTravelBudgetDraft(e.target.value)} />
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('Tracked separately from monthly spending')}</p>
             </div>
             <div className="text-xs text-zinc-600 dark:text-zinc-400">{tt('Saved: {min} – {max}', { min: currency(budgetSaved.min), max: currency(budgetSaved.max) })}</div>
             <div className="mt-4 text-sm font-semibold">{t('Egg tiers')}</div>

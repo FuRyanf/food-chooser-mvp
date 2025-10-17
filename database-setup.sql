@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   forbid_repeat_days INTEGER NOT NULL DEFAULT 1,
   strict_budget BOOLEAN NOT NULL DEFAULT true,
   monthly_budget NUMERIC(10, 2),
+  annual_travel_budget NUMERIC(10, 2),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
