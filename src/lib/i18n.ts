@@ -161,7 +161,7 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Grocery trip updated': { zh: '雜貨紀錄已更新' },
   'Travel Tag': { zh: '旅行標籤' },
   "Mark as seed (won't count toward spend)": { zh: '標記為種子資料（不計入花費）' },
-  "Today's Context": { zh: '今日情境' },
+  "Your Snapshot": { zh: '你的快照' },
   'Condition': { zh: '天氣狀況' },
   'Temp': { zh: '溫度' },
   'Month-to-date Spend': { zh: '本月累計花費' },

@@ -2552,7 +2552,12 @@ function MainApp() {
 
         <div className="space-y-4">
           <div className={`${panelClass} space-y-4`}>
-            <div className="text-sm font-semibold mb-1">{t("Today's Context")}</div>
+            <div className="space-y-1 mb-3">
+              <div className="text-sm font-semibold">{t("Your Snapshot")}</div>
+              <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} • {wx.tempF}°F {weatherIcon(wx.condition)} {locationName}
+              </div>
+            </div>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
                 <div className="label">{t('Condition')}</div>
