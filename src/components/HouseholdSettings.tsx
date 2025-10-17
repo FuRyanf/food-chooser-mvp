@@ -317,77 +317,77 @@ export function HouseholdSettings() {
       {/* Profile & Household Section */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Profile Settings */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <User className="w-5 h-5 text-orange-500" />
-            Your Profile
-          </h3>
-        
-        {profileError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-xs sm:text-sm mb-3">
-            {profileError}
+        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <User className="w-5 h-5 text-orange-500" />
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Your Profile</h3>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Defaults as "Who paid?" in entries
+            </p>
           </div>
-        )}
-
-        {profileSuccess && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg text-xs sm:text-sm mb-3">
-            {profileSuccess}
-          </div>
-        )}
-
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            This name defaults as "Who paid?" in entries
-          </p>
           
-          <div className="space-y-3">
+          <div className="p-5 space-y-3">
             <input
               type="text"
               value={newDisplayName}
               onChange={(e) => setNewDisplayName(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
-              placeholder="e.g., Ryan, Sarah"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 transition-shadow"
+              placeholder="Enter your name"
               disabled={loading || profileLoading}
             />
             
             {profileError && (
-              <p className="text-xs text-red-600 dark:text-red-400">{profileError}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                <XCircle className="w-3.5 h-3.5" />
+                {profileError}
+              </p>
             )}
             {profileSuccess && (
-              <p className="text-xs text-green-600 dark:text-green-400">{profileSuccess}</p>
+              <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5" />
+                {profileSuccess}
+              </p>
             )}
             
             <button
               onClick={handleUpdateProfile}
               disabled={loading || profileLoading || newDisplayName === displayName || !newDisplayName.trim()}
-              className="w-full px-4 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 active:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md disabled:shadow-none"
             >
-              {loading ? 'Saving...' : 'Update'}
+              {loading ? 'Updating...' : 'Update'}
             </button>
           </div>
         </div>
 
         {/* Household Name */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-purple-500" />
-            Household Name
-          </h3>
+        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-500" />
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Household Name</h3>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Shared with all members
+            </p>
+          </div>
           
-          <div className="space-y-3">
+          <div className="p-5 space-y-3">
             <input
               type="text"
               value={newHouseholdName}
               onChange={(e) => setNewHouseholdName(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100"
-              placeholder="My Family"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 transition-shadow"
+              placeholder="My Household"
               disabled={loading}
             />
             <button
               onClick={updateHouseholdName}
               disabled={loading || newHouseholdName === householdName}
-              className="w-full px-4 py-2.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 active:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md disabled:shadow-none"
             >
-              Save
+              {loading ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>
