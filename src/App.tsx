@@ -2550,28 +2550,17 @@ function MainApp() {
 
         <div className="space-y-4">
           <div className={`${panelClass} space-y-4`}>
-            <div className="space-y-1 mb-3">
-              <div className="text-sm font-semibold">{t("Your Snapshot")}</div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} • {wx.tempF}°F {weatherIcon(wx.condition)} {locationName}
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <div className="label">{t('Condition')}</div>
-                <div className="flex items-center gap-1 text-lg font-semibold capitalize">
-                  {weatherIcon(wx.condition)} <span>{wx.condition}</span>
+            <div className="flex items-start justify-between mb-4">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold">{t("Your Snapshot")}</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} • {wx.tempF}°F {weatherIcon(wx.condition)} {locationName}
                 </div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">{locationName || t('Location unavailable')}</div>
               </div>
-              <div>
-                <div className="label">{t('Temp')}</div>
-                <div className="text-lg font-semibold">{wx.tempF}°F</div>
-              </div>
-              <div>
-                <div className="label">{t('Month-to-date Spend')}</div>
+              <div className="text-right">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">{t('Month-to-date')}</div>
                 <button
-                  className="text-left text-lg font-semibold underline decoration-dotted"
+                  className="text-lg font-semibold underline decoration-dotted hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                   onClick={() => {
                     setSpendSelection(monthKey(new Date()));
                     setSpendOpen(true);
