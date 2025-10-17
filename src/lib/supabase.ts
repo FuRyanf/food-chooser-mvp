@@ -15,7 +15,12 @@ if (!hasValidEnv) {
 
 // Create a mock client if env vars are missing
 export const supabase = hasValidEnv 
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    })
   : null
 
 // Database types
