@@ -5,7 +5,7 @@ import EggGacha from "./components/EggGacha";
 import { FoodChooserAPI } from './lib/api';
 import type { Database } from './lib/supabase';
 import { createPortal } from 'react-dom';
-import { Language, translateTemplate, translateText } from './lib/i18n';
+import { Language, translateTemplate, translateText, LanguageProvider } from './lib/i18n';
 import crackedEggImg from '../image cracked egg.png';
 import { AuthenticatedApp } from './components/AuthenticatedApp';
 import { useAuth } from './contexts/AuthContext';
@@ -262,12 +262,25 @@ export default function App() {
 
   return (
     <AuthenticatedApp>
-      <AppRouter />
+      <AppRouterWithLanguage />
     </AuthenticatedApp>
   );
 }
 
-function AppRouter() {
+function AppRouterWithLanguage() {
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('fudi.language');
+    return (saved === 'zh' || saved === 'en') ? saved : 'en';
+  });
+
+  return (
+    <LanguageProvider value={language}>
+      <AppRouter language={language} setLanguage={setLanguage} />
+    </LanguageProvider>
+  );
+}
+
+function AppRouter({ language, setLanguage }: { language: Language; setLanguage: (lang: Language) => void }) {
   const { user, needsOnboarding, householdId, refreshHousehold } = useAuth();
 
   // If user is authenticated but needs onboarding (no household)
@@ -283,10 +296,10 @@ function AppRouter() {
   }
 
   // Normal app flow
-  return <MainApp />;
+  return <MainApp language={language} setLanguage={setLanguage} />;
 }
 
-function MainApp() {
+function MainApp({ language, setLanguage }: { language: Language; setLanguage: (lang: Language) => void }) {
   const { householdId, user, signOut, householdName } = useAuth();
   const { displayName } = useProfile();
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -301,8 +314,6 @@ function MainApp() {
   const [picked, setPicked] = useState<Recommendation | undefined>();
   const [overrides, setOverrides] = useState<Overrides>({});
   const [isOverride, setIsOverride] = useState(false);
-
-  const [language, setLanguage] = useState<Language>(() => resolveInitialLanguage());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const initialTheme = resolveInitialTheme();
     if (typeof document !== 'undefined') {
@@ -1449,7 +1460,7 @@ function MainApp() {
                 <button
                   type="button"
                   className="btn-ghost flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-4 py-2 text-xs font-medium backdrop-blur dark:border-white/10 dark:bg-zinc-800/60"
-                  onClick={() => setLanguage(prev => (prev === 'en' ? 'zh' : 'en'))}
+                  onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
                   aria-label={t('Switch Language')}
                   title={t('Switch Language')}
                 >

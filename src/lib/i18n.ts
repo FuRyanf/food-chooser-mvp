@@ -1,4 +1,15 @@
+import { createContext, useContext, useCallback } from 'react';
+
 export type Language = 'en' | 'zh';
+
+// Language Context
+const LanguageContext = createContext<Language>('en');
+
+export const LanguageProvider = LanguageContext.Provider;
+
+export function useLanguage(): Language {
+  return useContext(LanguageContext);
+}
 
 const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Home': { zh: '首頁' },
@@ -276,9 +287,16 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Manage your profile, household, and members': { zh: '管理你的個人檔案、家庭與成員' },
   'Household name cannot be empty': { zh: '家庭名稱不能為空' },
   'Household name updated!': { zh: '家庭名稱已更新！' },
+  'Failed to update household name': { zh: '更新家庭名稱失敗' },
+  'Unable to generate invite': { zh: '無法生成邀請' },
+  'Failed to generate code': { zh: '生成邀請碼失敗' },
+  'Use "Leave Household" button to remove yourself': { zh: '請使用「離開家庭」按鈕來移除自己' },
+  'Member removed': { zh: '成員已移除' },
+  'Failed to remove member': { zh: '移除成員失敗' },
+  'Household deleted. All data has been removed.': { zh: '家庭已刪除。所有資料已移除。' },
+  'You have left the household.': { zh: '你已離開家庭。' },
   'Failed to leave household': { zh: '離開家庭失敗' },
   'Invite link copied to clipboard!': { zh: '邀請連結已複製到剪貼板！' },
-  'Failed to update profile': { zh: '更新個人檔案失敗' },
   'Failed to switch households': { zh: '切換家庭失敗' },
   'Defaults as "Who paid?" in entries': { zh: '預設為紀錄中的「誰付款？」' },
   'Enter your name': { zh: '輸入你的名字' },
@@ -313,20 +331,11 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'All household members share meals, groceries, and preferences. Only owners can invite new members. Each person can only belong to one household at a time.': { zh: '所有家庭成員共享餐點、雜貨與偏好設定。只有擁有者可以邀請新成員。每個人一次只能屬於一個家庭。' },
   'Link copied to clipboard!': { zh: '連結已複製到剪貼板！' },
   'Switched to {household_name}!': { zh: '已切換至 {household_name}！' },
-  
-  // Egg Tiers
-  'Egg tiers': { zh: '神秘蛋等級' },
   'Customize egg tier boundaries': { zh: '自訂神秘蛋等級界限' },
   'Bronze (under):': { zh: '青銅（低於）：' },
   'Silver (under):': { zh: '白銀（低於）：' },
   'Gold (under):': { zh: '黃金（低於）：' },
   'Diamond (above Gold)': { zh: '鑽石（黃金以上）' },
-  'Bronze': { zh: '青銅' },
-  'Silver': { zh: '白銀' },
-  'Gold': { zh: '黃金' },
-  'Diamond': { zh: '鑽石' },
-  'Eligible': { zh: '符合資格' },
-  'Not eligible': { zh: '不符合資格' },
 };
 
 export function translateText(text: string, language: Language): string {
@@ -339,4 +348,12 @@ export function translateText(text: string, language: Language): string {
 export function translateTemplate(text: string, language: Language, replacements: Record<string, string | number>): string {
   const base = translateText(text, language);
   return Object.entries(replacements).reduce((acc, [key, value]) => acc.replace(`{${key}}`, String(value)), base);
+}
+
+// Hook for components to use i18n
+export function useI18n() {
+  const language = useLanguage();
+  const t = useCallback((text: string) => translateText(text, language), [language]);
+  const tt = useCallback((text: string, replacements: Record<string, string | number>) => translateTemplate(text, language, replacements), [language]);
+  return { t, tt };
 }
