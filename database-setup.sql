@@ -555,9 +555,9 @@ BEGIN
   END IF;
 
   -- Check if user is already in a household
-  SELECT household_id INTO v_existing_household_id
-  FROM household_members
-  WHERE user_id = v_user_id
+  SELECT hm.household_id INTO v_existing_household_id
+  FROM household_members hm
+  WHERE hm.user_id = v_user_id
   LIMIT 1;
 
   -- If user is already in the same household, return success
@@ -569,23 +569,23 @@ BEGIN
   -- If user is in a different household, auto-leave it
   IF v_existing_household_id IS NOT NULL THEN
     -- Remove user from old household
-    DELETE FROM household_members
-    WHERE user_id = v_user_id;
+    DELETE FROM household_members hm
+    WHERE hm.user_id = v_user_id;
     
     -- Check if old household is now empty
     SELECT COUNT(*) INTO v_remaining_members
-    FROM household_members
-    WHERE household_id = v_existing_household_id;
+    FROM household_members hm
+    WHERE hm.household_id = v_existing_household_id;
     
     -- If empty, clean up the old household
     IF v_remaining_members = 0 THEN
-      DELETE FROM household_invitations WHERE household_id = v_existing_household_id;
-      DELETE FROM meals WHERE household_id = v_existing_household_id;
-      DELETE FROM groceries WHERE household_id = v_existing_household_id;
-      DELETE FROM user_preferences WHERE household_id = v_existing_household_id;
-      DELETE FROM cuisine_overrides WHERE household_id = v_existing_household_id;
-      DELETE FROM disabled_items WHERE household_id = v_existing_household_id;
-      DELETE FROM households WHERE id = v_existing_household_id;
+      DELETE FROM household_invitations hi WHERE hi.household_id = v_existing_household_id;
+      DELETE FROM meals m WHERE m.household_id = v_existing_household_id;
+      DELETE FROM groceries g WHERE g.household_id = v_existing_household_id;
+      DELETE FROM user_preferences up WHERE up.household_id = v_existing_household_id;
+      DELETE FROM cuisine_overrides co WHERE co.household_id = v_existing_household_id;
+      DELETE FROM disabled_items di WHERE di.household_id = v_existing_household_id;
+      DELETE FROM households h WHERE h.id = v_existing_household_id;
     END IF;
   END IF;
 
