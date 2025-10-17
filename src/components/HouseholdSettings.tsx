@@ -407,12 +407,11 @@ export function HouseholdSettings() {
               <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Invite Code:</p>
                 <div className="text-4xl font-bold tracking-[0.5em] text-blue-600 dark:text-blue-400 font-mono mb-4">
-                  {inviteCode.slice(-6).toUpperCase()}
+                  {inviteCode.toUpperCase()}
                 </div>
                 <button
                   onClick={() => {
-                    const code = inviteCode.slice(-6).toUpperCase()
-                    navigator.clipboard.writeText(code)
+                    navigator.clipboard.writeText(inviteCode.toUpperCase())
                     setSuccess('Code copied to clipboard!')
                     setTimeout(() => setSuccess(null), 2000)
                   }}
@@ -428,13 +427,13 @@ export function HouseholdSettings() {
                 <div className="space-y-3">
                   <input
                     type="text"
-                    value={`${window.location.origin}/invite/${inviteCode}`}
+                    value={`${window.location.origin}/invite/${inviteCode.toUpperCase()}`}
                     readOnly
                     className="w-full px-3 py-2.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-mono"
                   />
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/invite/${inviteCode}`)
+                      navigator.clipboard.writeText(`${window.location.origin}/invite/${inviteCode.toUpperCase()}`)
                       setSuccess('Link copied to clipboard!')
                       setTimeout(() => setSuccess(null), 2000)
                     }}

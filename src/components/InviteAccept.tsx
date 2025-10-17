@@ -52,6 +52,10 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
     try {
       setLoading(true)
       
+      console.log('🔍 Fetching invite info for token:', inviteToken)
+      console.log('🔍 Token length:', inviteToken.length)
+      console.log('🔍 Token uppercase:', inviteToken.toUpperCase())
+      
       // RPC returns a TABLE, so we need to handle it as an array
       const { data, error } = await supabase
         .rpc('get_invite_info', { p_invite_code: inviteToken })
@@ -65,6 +69,7 @@ export default function InviteAccept({ inviteToken, onAccepted }: InviteAcceptPr
 
       // Data should be an array from the TABLE return type
       if (!data || !Array.isArray(data) || data.length === 0) {
+        console.error('❌ No invite data found for code:', inviteToken)
         setError('Invalid or expired invitation code')
         setLoading(false)
         return
