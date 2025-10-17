@@ -338,12 +338,10 @@ FuDi includes a complete household management system with email invitations:
 
 ### Quick Start
 1. Sign in with Google
-2. Create a new household or wait for an invitation
-3. Invite others by entering their email in Household Settings
-4. Share the generated invite link (copied to clipboard)
-5. Recipients click link to join your household
-
-**For complete details, see [HOUSEHOLD_INVITE_SYSTEM.md](HOUSEHOLD_INVITE_SYSTEM.md)**
+2. Create a new household (set name + your profile name)
+3. In Household Settings, generate a 6-character invite code
+4. Share the code or link with family/friends
+5. They enter the code or click the link to join your household
 
 ---
 
@@ -351,8 +349,8 @@ FuDi includes a complete household management system with email invitations:
 
 For questions or issues:
 1. Check the troubleshooting section above
-2. Review household invite docs: [HOUSEHOLD_INVITE_SYSTEM.md](HOUSEHOLD_INVITE_SYSTEM.md)
-3. Check archived docs in `docs/archive/`
+2. Review [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed configuration steps
+3. Check archived docs in `docs/archive/` for historical implementation details
 4. Open a GitHub issue
 
 ---

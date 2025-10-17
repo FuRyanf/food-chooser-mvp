@@ -12,8 +12,8 @@ This directory contains additional documentation and archived files.
 The `archive/` folder contains detailed guides that were created during initial development. These are kept for reference but have been consolidated into the main README and SETUP_GUIDE.
 
 ### Authentication Setup
-- `add-authentication-schema.sql` - Original auth schema (now in `database-setup-complete.sql`)
-- `supabase-schema.sql` - Original base schema (now in `database-setup-complete.sql`)
+- `add-authentication-schema.sql` - Original auth schema (now in `../database-setup.sql`)
+- `supabase-schema.sql` - Original base schema (now in `../database-setup.sql`)
 - `AUTHENTICATION_GUIDE.md` - Detailed auth implementation guide
 - `SUPABASE_AUTH_SETUP.md` - Google OAuth configuration steps
 - `APP_INTEGRATION_GUIDE.md` - How to integrate auth into components
