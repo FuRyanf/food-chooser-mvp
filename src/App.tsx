@@ -145,7 +145,13 @@ function pseudoWeatherFallback(): Weather {
   const t = 72;
   return { condition: 'mild', tempF: t };
 }
-function deriveTier(cost:number): EggTier { if (cost<15) return 'Bronze'; if (cost<30) return 'Silver'; if (cost<55) return 'Gold'; return 'Diamond'; }
+// Note: This function uses hardcoded defaults - actual tier determination should use user preferences
+function deriveTier(cost:number, bronze=15, silver=30, gold=55): EggTier { 
+  if (cost<bronze) return 'Bronze'; 
+  if (cost<silver) return 'Silver'; 
+  if (cost<gold) return 'Gold'; 
+  return 'Diamond'; 
+}
 
 const seedMeals: Omit<MealInsert, 'user_id' | 'created_at' | 'updated_at'>[] = [
   { date: new Date(Date.now()-86400000*6).toISOString(), cuisine:'Mexican', dish:'Chipotle Bowl', restaurant:'Chipotle', cost:14.5, rating:4, notes: null, seed_only: false, purchaser_name: 'Unknown' },
@@ -436,6 +442,9 @@ function MainApp() {
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
   const [annualTravelBudgetDraft, setAnnualTravelBudgetDraft] = useState<string>('');
   const [annualTravelBudgetSaved, setAnnualTravelBudgetSaved] = useState<number | null>(null);
+  const [tierBronzeMax, setTierBronzeMax] = useState<number>(15);
+  const [tierSilverMax, setTierSilverMax] = useState<number>(30);
+  const [tierGoldMax, setTierGoldMax] = useState<number>(55);
   const quickStats = useMemo(() => [
     {
       label: t('Budget'),
@@ -485,10 +494,10 @@ function MainApp() {
     const intersects = (aMin:number, aMax:number, bMin:number, bMax:number)=> aMax >= bMin && bMax >= aMin;
     type Tier = { name:'Bronze'|'Silver'|'Gold'|'Diamond'; rangeLabel:string; rangeMin:number; rangeMax:number|null; eligible:boolean; badge:string; tip?:string };
     const tiersBase: Array<Omit<Tier,'eligible'|'badge'|'tip'>> = [
-      { name: 'Bronze', rangeLabel: '< $15', rangeMin: 0, rangeMax: 15 },
-      { name: 'Silver', rangeLabel: '$15 – $29.99', rangeMin: 15, rangeMax: 30 },
-      { name: 'Gold', rangeLabel: '$30 – $54.99', rangeMin: 30, rangeMax: 55 },
-      { name: 'Diamond', rangeLabel: '$55+', rangeMin: 55, rangeMax: null },
+      { name: 'Bronze', rangeLabel: `< $${tierBronzeMax}`, rangeMin: 0, rangeMax: tierBronzeMax },
+      { name: 'Silver', rangeLabel: `$${tierBronzeMax} – $${tierSilverMax - 0.01}`, rangeMin: tierBronzeMax, rangeMax: tierSilverMax },
+      { name: 'Gold', rangeLabel: `$${tierSilverMax} – $${tierGoldMax - 0.01}`, rangeMin: tierSilverMax, rangeMax: tierGoldMax },
+      { name: 'Diamond', rangeLabel: `$${tierGoldMax}+`, rangeMin: tierGoldMax, rangeMax: null },
     ];
     const badgeByTier: Record<string, string> = {
       Bronze: 'border-amber-400 text-amber-700',
@@ -509,7 +518,7 @@ function MainApp() {
       return { ...tb, eligible, badge: badgeByTier[tb.name], tip } as Tier;
     });
     return list;
-  }, [budgetSaved]);
+  }, [budgetSaved, tierBronzeMax, tierSilverMax, tierGoldMax]);
 
   useEffect(()=>{ loadData(); }, []);
 
@@ -535,6 +544,9 @@ function MainApp() {
         setMonthlyBudgetDraft(prefsData.monthly_budget != null ? String(prefsData.monthly_budget) : '');
         setAnnualTravelBudgetSaved((prefsData as any).annual_travel_budget ?? null);
         setAnnualTravelBudgetDraft((prefsData as any).annual_travel_budget != null ? String((prefsData as any).annual_travel_budget) : '');
+        setTierBronzeMax((prefsData as any).tier_bronze_max ?? 15);
+        setTierSilverMax((prefsData as any).tier_silver_max ?? 30);
+        setTierGoldMax((prefsData as any).tier_gold_max ?? 55);
       }
       setOverrides(overridesData);
     } catch (err) {
@@ -566,7 +578,10 @@ function MainApp() {
         forbid_repeat_days: days,
         strict_budget: true,
         monthly_budget: monthlyBudget,
-        annual_travel_budget: annualTravelBudget
+        annual_travel_budget: annualTravelBudget,
+        tier_bronze_max: tierBronzeMax,
+        tier_silver_max: tierSilverMax,
+        tier_gold_max: tierGoldMax
       } as any);
       setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
@@ -2785,11 +2800,27 @@ function MainApp() {
             </div>
             <div className="text-xs text-zinc-600 dark:text-zinc-400">{tt('Saved: {min} – {max}', { min: currency(budgetSaved.min), max: currency(budgetSaved.max) })}</div>
             <div className="mt-4 text-sm font-semibold">{t('Egg tiers')}</div>
+            <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400 mb-2">{t('Customize egg tier boundaries')}</div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <div className="label text-xs">{t('Bronze (under):')}</div>
+                <input className="input text-sm" type="number" min="1" value={tierBronzeMax} onChange={e => setTierBronzeMax(Number(e.target.value))} />
+              </div>
+              <div>
+                <div className="label text-xs">{t('Silver (under):')}</div>
+                <input className="input text-sm" type="number" min={tierBronzeMax + 1} value={tierSilverMax} onChange={e => setTierSilverMax(Number(e.target.value))} />
+              </div>
+              <div>
+                <div className="label text-xs">{t('Gold (under):')}</div>
+                <input className="input text-sm" type="number" min={tierSilverMax + 1} value={tierGoldMax} onChange={e => setTierGoldMax(Number(e.target.value))} />
+              </div>
+            </div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">{t('Diamond (above Gold)')}</div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
               {eggEligibility.map(tier => (
                 <div key={tier.name} className="flex items-start justify-between rounded border px-2 py-2 dark:border-zinc-700">
                   <div className="flex flex-col">
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{tier.name}</span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{t(tier.name)}</span>
                     <span className="text-xs text-zinc-600 dark:text-zinc-400">{tier.rangeLabel}</span>
                     {!tier.eligible && tier.tip && <span className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{tier.tip}</span>}
                   </div>

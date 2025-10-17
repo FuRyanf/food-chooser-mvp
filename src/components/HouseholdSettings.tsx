@@ -100,7 +100,7 @@ export function HouseholdSettings() {
       await refreshHousehold()
     } catch (err) {
       console.error('Error updating household name:', err)
-      setError('Failed to update household name')
+      setError(t('Failed to update household name'))
     } finally {
       setLoading(false)
     }
@@ -108,7 +108,7 @@ export function HouseholdSettings() {
 
   const generateInviteCode = async () => {
     if (!householdId || !supabase) {
-      setError('Unable to generate invite')
+      setError(t('Unable to generate invite'))
       return
     }
 
@@ -131,7 +131,7 @@ export function HouseholdSettings() {
         // Copy to clipboard
         await navigator.clipboard.writeText(code)
         
-        setSuccess('Code copied to clipboard!')
+        setSuccess(t('Code copied to clipboard!'))
         setTimeout(() => setSuccess(null), 3000)
       }
     } catch (err: any) {
@@ -147,7 +147,7 @@ export function HouseholdSettings() {
     
     const currentMember = members.find(m => m.user_id === user?.id)
     if (memberUserId === user?.id) {
-      setError('Use "Leave Household" button to remove yourself')
+      setError(t('Use "Leave Household" button to remove yourself'))
       return
     }
 
@@ -166,12 +166,12 @@ export function HouseholdSettings() {
 
       if (error) throw error
 
-      setSuccess('Member removed')
+      setSuccess(t('Member removed'))
       setTimeout(() => setSuccess(null), 3000)
       await fetchMembers()
     } catch (err) {
       console.error('Error removing member:', err)
-      setError('Failed to remove member')
+      setError(t('Failed to remove member'))
     } finally {
       setLoading(false)
     }
@@ -195,9 +195,9 @@ export function HouseholdSettings() {
 
       if (data && data.length > 0 && data[0].success) {
         if (isLastMember) {
-          setSuccess('Household deleted. All data has been removed.')
+          setSuccess(t('Household deleted. All data has been removed.'))
         } else {
-          setSuccess('You have left the household.')
+          setSuccess(t('You have left the household.'))
         }
         
         // Sign out and redirect to onboarding
@@ -205,11 +205,11 @@ export function HouseholdSettings() {
           window.location.reload()
         }, 1500)
       } else {
-        throw new Error(data?.[0]?.message || 'Failed to leave household')
+        throw new Error(data?.[0]?.message || t('Failed to leave household'))
       }
     } catch (err: any) {
       console.error('Error leaving household:', err)
-      setError(err.message || 'Failed to leave household')
+      setError(err.message || t('Failed to leave household'))
       setLoading(false)
     }
   }
@@ -217,7 +217,7 @@ export function HouseholdSettings() {
   const copyInviteLink = (token: string) => {
     const inviteUrl = `${window.location.origin}/invite/${token}`
     navigator.clipboard.writeText(inviteUrl)
-    setSuccess('Invite link copied to clipboard!')
+    setSuccess(t('Invite link copied to clipboard!'))
     setTimeout(() => setSuccess(null), 3000)
   }
 
@@ -294,10 +294,10 @@ export function HouseholdSettings() {
       <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
         <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-gray-100">
           <Users className="w-6 h-6" />
-          Household Settings
+          {t('Household Settings')}
         </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-          Manage your profile, household, and members
+          {t('Manage your profile, household, and members')}
         </p>
       </div>
 
@@ -323,10 +323,10 @@ export function HouseholdSettings() {
           <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <User className="w-5 h-5 text-orange-500" />
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Your Profile</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('Your Profile')}</h3>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Defaults as "Who paid?" in entries
+              {t('Defaults as "Who paid?" in entries')}
             </p>
           </div>
           
@@ -336,7 +336,7 @@ export function HouseholdSettings() {
               value={newDisplayName}
               onChange={(e) => setNewDisplayName(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 transition-shadow"
-              placeholder="Enter your name"
+              placeholder={t('Enter your name')}
               disabled={loading || profileLoading}
             />
             
@@ -358,7 +358,7 @@ export function HouseholdSettings() {
               disabled={loading || profileLoading || newDisplayName === displayName || !newDisplayName.trim()}
               className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md disabled:shadow-none"
             >
-              {loading ? 'Updating...' : 'Update'}
+              {loading ? t('Updating...') : t('Update')}
             </button>
           </div>
         </div>
@@ -368,10 +368,10 @@ export function HouseholdSettings() {
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-purple-500" />
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Household Name</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('Household Name')}</h3>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Shared with all members
+              {t('Shared with all members')}
             </p>
           </div>
           
@@ -381,7 +381,7 @@ export function HouseholdSettings() {
               value={newHouseholdName}
               onChange={(e) => setNewHouseholdName(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-zinc-800 text-gray-900 dark:text-gray-100 transition-shadow"
-              placeholder="My Household"
+              placeholder={t('My Household')}
               disabled={loading}
             />
             <button
@@ -389,7 +389,7 @@ export function HouseholdSettings() {
               disabled={loading || newHouseholdName === householdName}
               className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md disabled:shadow-none"
             >
-              {loading ? 'Saving...' : 'Save'}
+              {loading ? t('Saving...') : t('Save')}
             </button>
           </div>
         </div>
@@ -400,14 +400,14 @@ export function HouseholdSettings() {
         <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
           <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Invite Members
+            {t('Invite Members')}
           </h3>
           
           {inviteCode ? (
             <div className="space-y-4">
               {/* Code Display */}
               <div className="bg-white dark:bg-blue-950/50 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Invite Code:</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('Invite Code:')}</p>
                 <div className="text-4xl font-bold tracking-[0.5em] text-blue-600 dark:text-blue-400 font-mono mb-4">
                   {inviteCode.toUpperCase()}
                 </div>
@@ -419,13 +419,13 @@ export function HouseholdSettings() {
                   }}
                   className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm"
                 >
-                  📋 Copy Code
+                  {t('📋 Copy Code')}
                 </button>
               </div>
 
               {/* Link Display */}
               <div className="bg-white dark:bg-blue-950/50 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Or share this link:</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('Or share this link:')}</p>
                 <div className="space-y-3">
                   <input
                     type="text"
@@ -436,12 +436,12 @@ export function HouseholdSettings() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${window.location.origin}/invite/${inviteCode.toUpperCase()}`)
-                      setSuccess('Link copied to clipboard!')
+                      setSuccess(t('Link copied to clipboard!'))
                       setTimeout(() => setSuccess(null), 2000)
                     }}
                     className="w-full sm:w-auto px-6 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm"
                   >
-                    📋 Copy Link
+                    {t('📋 Copy Link')}
                   </button>
                 </div>
               </div>
@@ -449,7 +449,7 @@ export function HouseholdSettings() {
               <div className="bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
                 <p className="text-xs text-blue-800 dark:text-blue-200 flex items-start gap-2">
                   <span className="text-base">💡</span>
-                  <span>Code and link expire in 7 days. Can be used by multiple people.</span>
+                  <span>{t('Code and link expire in 7 days. Can be used by multiple people.')}</span>
                 </p>
               </div>
               
@@ -457,13 +457,13 @@ export function HouseholdSettings() {
                 onClick={() => setInviteCode(null)}
                 className="w-full text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 py-2 transition-colors"
               >
-                ← Hide
+                {t('← Hide')}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-blue-700 dark:text-blue-200">
-                Generate a simple code to invite people to your household
+                {t('Generate a simple code to invite people to your household')}
               </p>
               <button
                 onClick={generateInviteCode}
@@ -471,7 +471,7 @@ export function HouseholdSettings() {
                 className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-sm"
               >
                 <Send className="w-4 h-4" />
-                {loading ? 'Generating...' : 'Generate Invite Code'}
+                {loading ? t('Generating...') : t('Generate Invite Code')}
               </button>
             </div>
           )}
@@ -481,7 +481,7 @@ export function HouseholdSettings() {
       {/* Members List */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="font-semibold mb-4 text-gray-800">
-          Members ({members.length})
+          {tt('Members ({count})', { count: members.length })}
         </h3>
         <div className="space-y-2">
           {members.map((member) => {
@@ -505,12 +505,12 @@ export function HouseholdSettings() {
                       {member.email}
                       {isCurrentUser && (
                         <span className="ml-2 text-xs text-purple-600 font-semibold">
-                          (You)
+                          {t('(You)')}
                         </span>
                       )}
                     </p>
                     <p className="text-xs text-gray-500 capitalize">
-                      {member.role} • Joined {new Date(member.joined_at).toLocaleDateString()}
+                      {member.role} • {t('Joined')} {new Date(member.joined_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -519,7 +519,7 @@ export function HouseholdSettings() {
                     onClick={() => removeMember(member.id, member.user_id)}
                     disabled={loading}
                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                    title="Remove member"
+                    title={t('Remove member')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -534,18 +534,17 @@ export function HouseholdSettings() {
       <div className="bg-white p-6 rounded-lg shadow border-2 border-red-100">
         <h3 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
           <AlertCircle className="w-5 h-5" />
-          Danger Zone
+          {t('Danger Zone')}
         </h3>
         <p className="text-sm text-gray-600 mb-4">
           {isLastMember ? (
             <>
-              <strong>Warning:</strong> You are the last member of this household. 
-              Leaving will <strong className="text-red-600">permanently delete all household data</strong> including 
-              meals, groceries, preferences, and history.
+              <strong>{t('Warning:')}</strong> {t('You are the last member of this household. Leaving will permanently delete all household data including meals, groceries, preferences, and history.')} 
+
             </>
           ) : (
             <>
-              Leave this household. You can create a new household or join another one after leaving.
+              {t('Leave this household. You can create a new household or join another one after leaving.')}
             </>
           )}
         </p>
@@ -556,12 +555,12 @@ export function HouseholdSettings() {
             className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
           >
             <LogOut className="w-4 h-4" />
-            Leave Household
+            {t('Leave Household')}
           </button>
         ) : (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-red-700">
-              Are you absolutely sure?
+              {t('Are you absolutely sure?')}
             </p>
             <div className="flex gap-2">
               <button
@@ -569,14 +568,14 @@ export function HouseholdSettings() {
                 disabled={loading}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                {loading ? 'Leaving...' : 'Yes, Leave Household'}
+                {loading ? t('Leaving...') : t('Yes, Leave Household')}
               </button>
               <button
                 onClick={() => setShowLeaveConfirm(false)}
                 disabled={loading}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
-                Cancel
+                {t('Cancel')}
               </button>
             </div>
           </div>
@@ -586,8 +585,7 @@ export function HouseholdSettings() {
       {/* Info Box */}
       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
         <p className="text-sm text-gray-600">
-          <strong>💡 How it works:</strong> All household members share meals, groceries, and preferences. 
-          Only owners can invite new members. Each person can only belong to one household at a time.
+          <strong>{t('💡 How it works:')}</strong> {t('All household members share meals, groceries, and preferences. Only owners can invite new members. Each person can only belong to one household at a time.')}
         </p>
       </div>
     </div>
