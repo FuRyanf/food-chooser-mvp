@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProfile } from '../contexts/ProfileContext'
 import { supabase } from '../lib/supabase'
-import { Users, Crown, Trash2, Mail, Send, Clock, CheckCircle, XCircle, LogOut, AlertCircle, User } from 'lucide-react'
+import { Users, Crown, Trash2, Send, CheckCircle, XCircle, LogOut, AlertCircle, User } from 'lucide-react'
 
 interface HouseholdMember {
   id: string
@@ -12,22 +12,10 @@ interface HouseholdMember {
   joined_at: string
 }
 
-interface Invitation {
-  invite_id: string
-  invite_email: string
-  invite_token: string
-  inviter_email: string
-  status: string
-  created_at: string
-  expires_at: string
-  is_expired: boolean
-}
-
 export function HouseholdSettings() {
   const { householdId, householdName, user, refreshHousehold, signOut } = useAuth()
   const { displayName, updateDisplayName, loading: profileLoading } = useProfile()
   const [members, setMembers] = useState<HouseholdMember[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
   const [newHouseholdName, setNewHouseholdName] = useState('')
   const [newDisplayName, setNewDisplayName] = useState('')
   const [inviteCode, setInviteCode] = useState<string | null>(null)
@@ -43,7 +31,6 @@ export function HouseholdSettings() {
   useEffect(() => {
     if (householdId) {
       fetchMembers()
-      fetchInvitations()
       setNewHouseholdName(householdName || '')
     }
   }, [householdId, householdName])
@@ -86,21 +73,6 @@ export function HouseholdSettings() {
       } catch (fallbackErr) {
         console.error('Fallback query also failed:', fallbackErr)
       }
-    }
-  }
-
-  const fetchInvitations = async () => {
-    if (!householdId || !supabase) return
-
-    try {
-      const { data, error } = await supabase
-        .rpc('get_household_invites', { p_household_id: householdId })
-
-      if (error) throw error
-
-      setInvitations(data || [])
-    } catch (err) {
-      console.error('Error fetching invitations:', err)
     }
   }
 
@@ -158,9 +130,6 @@ export function HouseholdSettings() {
         await navigator.clipboard.writeText(code)
         
         setSuccess('Code copied to clipboard!')
-        
-        // Refresh invitations list
-        await fetchInvitations()
         setTimeout(() => setSuccess(null), 3000)
       }
     } catch (err: any) {
@@ -505,59 +474,6 @@ export function HouseholdSettings() {
               </button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Pending Invitations */}
-      {isOwner && invitations.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="font-semibold mb-4 text-gray-800 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gray-500" />
-            Invite History ({invitations.filter(i => i.status === 'pending' && !i.is_expired).length} active)
-          </h3>
-          <div className="space-y-2">
-            {invitations.map((invite) => {
-              const isExpired = invite.is_expired || invite.status !== 'pending'
-              const daysLeft = Math.ceil((new Date(invite.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-              
-              return (
-                <div
-                  key={invite.invite_id}
-                  className={`flex items-center justify-between p-4 rounded-lg ${
-                    isExpired ? 'bg-gray-50 opacity-60' : 'bg-blue-50 border border-blue-200'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">
-                      {invite.invite_email}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {isExpired ? (
-                        <span className="text-red-600">Expired</span>
-                      ) : invite.status === 'accepted' ? (
-                        <span className="text-green-600">Accepted ✓</span>
-                      ) : (
-                        <>
-                          Created {new Date(invite.created_at).toLocaleDateString()} • 
-                          Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  {!isExpired && (
-                    <button
-                      onClick={() => copyInviteLink(invite.invite_token)}
-                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
-                      title="Copy invite link to share again"
-                    >
-                      <Mail className="w-3 h-3" />
-                      Copy Link
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
         </div>
       )}
 
