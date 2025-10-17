@@ -41,7 +41,6 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Cost (low)': { zh: '費用（低到高）' },
   'Sort': { zh: '排序' },
   'Filter by cuisine': { zh: '依料理篩選' },
-  'Toggle to refine the grid': { zh: '切換以調整顯示項目' },
   'View': { zh: '檢視' },
   'Enabled only': { zh: '僅顯示啟用' },
   'Include disabled': { zh: '包含停用項目' },

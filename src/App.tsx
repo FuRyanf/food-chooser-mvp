@@ -1953,21 +1953,19 @@ function MainApp() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[250px,1fr]">
-              <aside className={`${glassCardClass} space-y-3 text-sm lg:sticky lg:top-6 lg:self-start`}>
+              <aside className={`${glassCardClass} space-y-4 text-sm lg:sticky lg:top-6 lg:self-start`}>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold">{t('Filter by cuisine')}</div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('Toggle to refine the grid')}</div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button className="btn-ghost text-[11px]" onClick={handleCuisineSelectAll}>{t('All')}</button>
-                    <button className="btn-ghost text-[11px]" onClick={handleCuisineClear}>{t('Clear')}</button>
+                  <div className="text-sm font-semibold">{t('Filter by cuisine')}</div>
+                  <div className="flex gap-2">
+                    <button className="text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors" onClick={handleCuisineSelectAll}>{t('All')}</button>
+                    <span className="text-zinc-300 dark:text-zinc-700">|</span>
+                    <button className="text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors" onClick={handleCuisineClear}>{t('Clear')}</button>
                   </div>
                 </div>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                   <input
-                    className="input w-full border border-zinc-200 pl-8 text-xs dark:border-zinc-700"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                     placeholder={t('Search cuisines')}
                     value={cuisineQuery}
                     onChange={e => setCuisineQuery(e.target.value)}
