@@ -20,6 +20,8 @@ const TRANSLATION_MAP: Record<string, { zh: string }> = {
   'Mystery picks & logging': { zh: '神秘推薦與紀錄' },
   'Browse your saved meals': { zh: '瀏覽已儲存的餐點' },
   'Track spending & contributions': { zh: '追蹤支出與分擔' },
+  'Household': { zh: '家庭' },
+  'Manage household settings': { zh: '管理家庭設定' },
   'Track & Decide': { zh: '追蹤與決定' },
   'Budget tracker that chooses for you': { zh: '幫你做選擇的預算追蹤器' },
   "Crack an egg to pick a meal, track spending on meals, groceries & travel, and share budgets with your household.": {
