@@ -533,12 +533,18 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Find the invite by code (case-insensitive, extract last 6 chars for flexibility)
+  -- Find the invite by code (handles both old 36-char and new 6-char formats)
   SELECT hi.id, hi.household_id, h.name
   INTO v_invite_id, v_household_id, v_household_name
   FROM household_invitations hi
   JOIN households h ON h.id = hi.household_id
-  WHERE UPPER(hi.invite_token) = UPPER(RIGHT(TRIM(p_invite_code), 6))
+  WHERE (
+    -- Match exact token (for old 36-char format)
+    UPPER(TRIM(hi.invite_token)) = UPPER(TRIM(p_invite_code))
+    OR
+    -- Match last 6 characters (for new 6-char format and flexibility)
+    UPPER(RIGHT(TRIM(hi.invite_token), 6)) = UPPER(RIGHT(TRIM(p_invite_code), 6))
+  )
   AND hi.status = 'pending'
   AND hi.expires_at > NOW()
   LIMIT 1;
@@ -594,7 +600,7 @@ BEGIN
 END;
 $$;
 
--- Function to get invite info
+-- Function to get invite info (handles both old 36-char and new 6-char codes)
 CREATE OR REPLACE FUNCTION get_invite_info(p_invite_code TEXT)
 RETURNS TABLE (
   invite_id UUID,
@@ -621,7 +627,13 @@ BEGIN
   FROM household_invitations hi
   JOIN households h ON h.id = hi.household_id
   LEFT JOIN auth.users u ON u.id = hi.inviter_id
-  WHERE UPPER(RIGHT(TRIM(hi.invite_token), 6)) = UPPER(RIGHT(TRIM(p_invite_code), 6))
+  WHERE (
+    -- Match exact token (for old 36-char format)
+    UPPER(TRIM(hi.invite_token)) = UPPER(TRIM(p_invite_code))
+    OR
+    -- Match last 6 characters (for new 6-char format and flexibility)
+    UPPER(RIGHT(TRIM(hi.invite_token), 6)) = UPPER(RIGHT(TRIM(p_invite_code), 6))
+  )
   AND hi.status = 'pending'
   AND hi.expires_at > NOW()
   LIMIT 1;
