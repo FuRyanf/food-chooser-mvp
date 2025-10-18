@@ -456,6 +456,9 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
   const [tierBronzeMax, setTierBronzeMax] = useState<number>(15);
   const [tierSilverMax, setTierSilverMax] = useState<number>(30);
   const [tierGoldMax, setTierGoldMax] = useState<number>(55);
+  const [tierBronzeMaxSaved, setTierBronzeMaxSaved] = useState<number>(15);
+  const [tierSilverMaxSaved, setTierSilverMaxSaved] = useState<number>(30);
+  const [tierGoldMaxSaved, setTierGoldMaxSaved] = useState<number>(55);
   const quickStats = useMemo(() => [
     {
       label: t('Budget'),
@@ -494,9 +497,12 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
       budgetDraft.max.trim() !== maxSaved ||
       forbidRepeatDaysDraft.trim() !== daysSaved ||
       monthlyBudgetDraft.trim() !== mbSaved ||
-      annualTravelBudgetDraft.trim() !== atbSaved
+      annualTravelBudgetDraft.trim() !== atbSaved ||
+      tierBronzeMax !== tierBronzeMaxSaved ||
+      tierSilverMax !== tierSilverMaxSaved ||
+      tierGoldMax !== tierGoldMaxSaved
     );
-  }, [budgetDraft, forbidRepeatDaysDraft, monthlyBudgetDraft, annualTravelBudgetDraft, budgetSaved, forbidRepeatDaysSaved, monthlyBudgetSaved, annualTravelBudgetSaved]);
+  }, [budgetDraft, forbidRepeatDaysDraft, monthlyBudgetDraft, annualTravelBudgetDraft, budgetSaved, forbidRepeatDaysSaved, monthlyBudgetSaved, annualTravelBudgetSaved, tierBronzeMax, tierBronzeMaxSaved, tierSilverMax, tierSilverMaxSaved, tierGoldMax, tierGoldMaxSaved]);
 
   // Compute egg tier eligibility from saved budget
   const eggEligibility = useMemo(() => {
@@ -555,9 +561,15 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
         setMonthlyBudgetDraft(prefsData.monthly_budget != null ? String(prefsData.monthly_budget) : '');
         setAnnualTravelBudgetSaved((prefsData as any).annual_travel_budget ?? null);
         setAnnualTravelBudgetDraft((prefsData as any).annual_travel_budget != null ? String((prefsData as any).annual_travel_budget) : '');
-        setTierBronzeMax((prefsData as any).tier_bronze_max ?? 15);
-        setTierSilverMax((prefsData as any).tier_silver_max ?? 30);
-        setTierGoldMax((prefsData as any).tier_gold_max ?? 55);
+        const bronzeMax = (prefsData as any).tier_bronze_max ?? 15;
+        const silverMax = (prefsData as any).tier_silver_max ?? 30;
+        const goldMax = (prefsData as any).tier_gold_max ?? 55;
+        setTierBronzeMax(bronzeMax);
+        setTierSilverMax(silverMax);
+        setTierGoldMax(goldMax);
+        setTierBronzeMaxSaved(bronzeMax);
+        setTierSilverMaxSaved(silverMax);
+        setTierGoldMaxSaved(goldMax);
       }
       setOverrides(overridesData);
     } catch (err) {
@@ -598,6 +610,15 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
       setMonthlyBudgetSaved(saved.monthly_budget ?? null);
       setAnnualTravelBudgetSaved((saved as any).annual_travel_budget ?? null);
+      const savedBronzeMax = (saved as any).tier_bronze_max ?? tierBronzeMax;
+      const savedSilverMax = (saved as any).tier_silver_max ?? tierSilverMax;
+      const savedGoldMax = (saved as any).tier_gold_max ?? tierGoldMax;
+      setTierBronzeMax(savedBronzeMax);
+      setTierSilverMax(savedSilverMax);
+      setTierGoldMax(savedGoldMax);
+      setTierBronzeMaxSaved(savedBronzeMax);
+      setTierSilverMaxSaved(savedSilverMax);
+      setTierGoldMaxSaved(savedGoldMax);
       setPrefsSavedNotice(t('Preferences saved.'));
     } catch (e) {
       console.error('Failed to save preferences', e);
