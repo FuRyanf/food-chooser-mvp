@@ -569,7 +569,7 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
         : intersects(min, max, tb.rangeMin, tb.rangeMax - 0.01);
       // Build a simple tip if not eligible
       let tip: string | undefined;
-      if (!eligible) {
+      if (!eligible && tb.name !== 'Diamond') {
         if (max < tb.rangeMin) tip = `Increase Max to at least ${currency(tb.rangeMin)} to reach ${tb.name}.`;
         else if (tb.rangeMax !== null && min > tb.rangeMax - 0.01) tip = `Lower Min below ${currency(tb.rangeMax)} to reach ${tb.name}.`;
       }
