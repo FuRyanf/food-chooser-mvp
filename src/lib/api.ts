@@ -193,6 +193,22 @@ export class FoodChooserAPI {
     
     console.log('💾 Saving preferences for:', { userId: user.id, householdId, prefs })
     
+    const supportedPreferenceKeys = ['budget_min', 'budget_max', 'forbid_repeat_days', 'strict_budget', 'monthly_budget'] as const
+    const unsupportedKeys = Object.keys(prefs as Record<string, unknown>).filter(
+      (key) => !supportedPreferenceKeys.includes(key as typeof supportedPreferenceKeys[number])
+    )
+    if (unsupportedKeys.length) {
+      console.warn('Ignoring unsupported preference fields for Supabase upsert:', unsupportedKeys)
+    }
+
+    const sanitizedPrefs: Omit<UserPreferencesInsert, 'household_id' | 'user_id' | 'created_at' | 'updated_at'> = {
+      budget_min: prefs.budget_min,
+      budget_max: prefs.budget_max,
+      forbid_repeat_days: prefs.forbid_repeat_days,
+      strict_budget: prefs.strict_budget,
+      monthly_budget: prefs.monthly_budget ?? null
+    }
+    
     // Check if preferences already exist for this household
     const { data: existing } = await supabase!
       .from('user_preferences')
@@ -208,7 +224,7 @@ export class FoodChooserAPI {
       const { data, error } = await supabase!
         .from('user_preferences')
         .update({
-          ...prefs,
+          ...sanitizedPrefs,
           updated_at: now
         })
         .eq('household_id', householdId)
@@ -232,7 +248,7 @@ export class FoodChooserAPI {
       // Insert new preferences
       console.log('➕ Inserting new preferences')
       const prefsData: UserPreferencesInsert = {
-        ...prefs,
+        ...sanitizedPrefs,
         household_id: householdId,
         user_id: user.id,
         created_at: now,

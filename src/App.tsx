@@ -43,6 +43,44 @@ const currency = (n:number)=> `$${n.toFixed(2)}`;
 
 const THEME_STORAGE_KEY = 'fudi.theme';
 const LANGUAGE_STORAGE_KEY = 'fudi.language';
+const PREFERENCE_STORAGE_KEYS = {
+  annualTravelBudget: 'fudi.pref.annualTravelBudget',
+  tierBronzeMax: 'fudi.pref.tierBronzeMax',
+  tierSilverMax: 'fudi.pref.tierSilverMax',
+  tierGoldMax: 'fudi.pref.tierGoldMax'
+} as const;
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+function readStoredNumber(key: string): number | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredNumber(key: string, value: number | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value === null || value === undefined) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    if (!Number.isFinite(value)) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // Ignore storage errors (e.g., private mode)
+  }
+}
 
 function resolveInitialTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';
@@ -451,14 +489,17 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
   const [monthlyBudgetDraft, setMonthlyBudgetDraft] = useState<string>('');
   const [monthlyBudgetSaved, setMonthlyBudgetSaved] = useState<number | null>(null);
   const [monthlyBudgetEdit, setMonthlyBudgetEdit] = useState<boolean>(false);
-  const [annualTravelBudgetDraft, setAnnualTravelBudgetDraft] = useState<string>('');
-  const [annualTravelBudgetSaved, setAnnualTravelBudgetSaved] = useState<number | null>(null);
-  const [tierBronzeMax, setTierBronzeMax] = useState<number>(15);
-  const [tierSilverMax, setTierSilverMax] = useState<number>(30);
-  const [tierGoldMax, setTierGoldMax] = useState<number>(55);
-  const [tierBronzeMaxSaved, setTierBronzeMaxSaved] = useState<number>(15);
-  const [tierSilverMaxSaved, setTierSilverMaxSaved] = useState<number>(30);
-  const [tierGoldMaxSaved, setTierGoldMaxSaved] = useState<number>(55);
+  const [annualTravelBudgetDraft, setAnnualTravelBudgetDraft] = useState<string>(() => {
+    const stored = readStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget);
+    return stored != null ? String(stored) : '';
+  });
+  const [annualTravelBudgetSaved, setAnnualTravelBudgetSaved] = useState<number | null>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget));
+  const [tierBronzeMax, setTierBronzeMax] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax) ?? 15);
+  const [tierSilverMax, setTierSilverMax] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax) ?? 30);
+  const [tierGoldMax, setTierGoldMax] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax) ?? 55);
+  const [tierBronzeMaxSaved, setTierBronzeMaxSaved] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax) ?? 15);
+  const [tierSilverMaxSaved, setTierSilverMaxSaved] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax) ?? 30);
+  const [tierGoldMaxSaved, setTierGoldMaxSaved] = useState<number>(() => readStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax) ?? 55);
   const quickStats = useMemo(() => [
     {
       label: t('Budget'),
@@ -559,11 +600,49 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
         setForbidRepeatDaysDraft(String(prefsData.forbid_repeat_days));
         setMonthlyBudgetSaved(prefsData.monthly_budget ?? null);
         setMonthlyBudgetDraft(prefsData.monthly_budget != null ? String(prefsData.monthly_budget) : '');
-        setAnnualTravelBudgetSaved((prefsData as any).annual_travel_budget ?? null);
-        setAnnualTravelBudgetDraft((prefsData as any).annual_travel_budget != null ? String((prefsData as any).annual_travel_budget) : '');
-        const bronzeMax = (prefsData as any).tier_bronze_max ?? 15;
-        const silverMax = (prefsData as any).tier_silver_max ?? 30;
-        const goldMax = (prefsData as any).tier_gold_max ?? 55;
+
+        const supabaseAnnual = (prefsData as any).annual_travel_budget;
+        let annualValue = readStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget);
+        if (isFiniteNumber(supabaseAnnual)) {
+          annualValue = supabaseAnnual;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget, supabaseAnnual);
+        } else if (supabaseAnnual === null) {
+          annualValue = null;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget, null);
+        }
+        setAnnualTravelBudgetSaved(annualValue ?? null);
+        setAnnualTravelBudgetDraft(annualValue != null ? String(annualValue) : '');
+
+        const supabaseBronze = (prefsData as any).tier_bronze_max;
+        let bronzeMax = readStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax) ?? 15;
+        if (isFiniteNumber(supabaseBronze)) {
+          bronzeMax = supabaseBronze;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax, supabaseBronze);
+        } else if (supabaseBronze === null) {
+          bronzeMax = 15;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax, null);
+        }
+
+        const supabaseSilver = (prefsData as any).tier_silver_max;
+        let silverMax = readStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax) ?? 30;
+        if (isFiniteNumber(supabaseSilver)) {
+          silverMax = supabaseSilver;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax, supabaseSilver);
+        } else if (supabaseSilver === null) {
+          silverMax = 30;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax, null);
+        }
+
+        const supabaseGold = (prefsData as any).tier_gold_max;
+        let goldMax = readStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax) ?? 55;
+        if (isFiniteNumber(supabaseGold)) {
+          goldMax = supabaseGold;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax, supabaseGold);
+        } else if (supabaseGold === null) {
+          goldMax = 55;
+          writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax, null);
+        }
+
         setTierBronzeMax(bronzeMax);
         setTierSilverMax(silverMax);
         setTierGoldMax(goldMax);
@@ -600,25 +679,23 @@ function MainApp({ language, setLanguage }: { language: Language; setLanguage: (
         budget_max: max,
         forbid_repeat_days: days,
         strict_budget: true,
-        monthly_budget: monthlyBudget,
-        annual_travel_budget: annualTravelBudget,
-        tier_bronze_max: tierBronzeMax,
-        tier_silver_max: tierSilverMax,
-        tier_gold_max: tierGoldMax
-      } as any);
+        monthly_budget: monthlyBudget
+      });
       setBudgetSaved({ min: saved.budget_min, max: saved.budget_max });
       setForbidRepeatDaysSaved(saved.forbid_repeat_days);
       setMonthlyBudgetSaved(saved.monthly_budget ?? null);
-      setAnnualTravelBudgetSaved((saved as any).annual_travel_budget ?? null);
-      const savedBronzeMax = (saved as any).tier_bronze_max ?? tierBronzeMax;
-      const savedSilverMax = (saved as any).tier_silver_max ?? tierSilverMax;
-      const savedGoldMax = (saved as any).tier_gold_max ?? tierGoldMax;
-      setTierBronzeMax(savedBronzeMax);
-      setTierSilverMax(savedSilverMax);
-      setTierGoldMax(savedGoldMax);
-      setTierBronzeMaxSaved(savedBronzeMax);
-      setTierSilverMaxSaved(savedSilverMax);
-      setTierGoldMaxSaved(savedGoldMax);
+      setMonthlyBudgetDraft(monthlyBudget !== null ? String(monthlyBudget) : '');
+
+      writeStoredNumber(PREFERENCE_STORAGE_KEYS.annualTravelBudget, annualTravelBudget);
+      setAnnualTravelBudgetSaved(annualTravelBudget);
+      setAnnualTravelBudgetDraft(annualTravelBudget != null ? String(annualTravelBudget) : '');
+
+      writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierBronzeMax, tierBronzeMax);
+      writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierSilverMax, tierSilverMax);
+      writeStoredNumber(PREFERENCE_STORAGE_KEYS.tierGoldMax, tierGoldMax);
+      setTierBronzeMaxSaved(tierBronzeMax);
+      setTierSilverMaxSaved(tierSilverMax);
+      setTierGoldMaxSaved(tierGoldMax);
       setPrefsSavedNotice(t('Preferences saved.'));
     } catch (e) {
       console.error('Failed to save preferences', e);
