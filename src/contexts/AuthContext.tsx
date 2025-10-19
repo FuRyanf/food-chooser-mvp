@@ -17,11 +17,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const TIMEOUT_ERROR_PREFIX = 'timeout:'
+const HOUSEHOLD_CACHE_KEY = 'fudi.household.cache.v1'
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+  onTimeout?: () => void
+): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`${TIMEOUT_ERROR_PREFIX}${label}`)), timeoutMs)
+    timeoutId = setTimeout(() => {
+      onTimeout?.()
+      promise.catch(() => {})
+      reject(new Error(`${TIMEOUT_ERROR_PREFIX}${label}`))
+    }, timeoutMs)
   })
   try {
     return await Promise.race([promise, timeoutPromise])
@@ -41,18 +51,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     id: null,
     name: null
   })
+  const householdFetchRef = useRef<Promise<void> | null>(null)
+  const cachedHouseholdRef = useRef<{ userId: string; id: string | null; name: string | null } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = localStorage.getItem(HOUSEHOLD_CACHE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { userId: string; id: string | null; name: string | null } | null
+      if (parsed && typeof parsed.userId === 'string') {
+        cachedHouseholdRef.current = parsed
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to read cached household:', err)
+      cachedHouseholdRef.current = null
+    }
+  }, [])
 
   const applyHouseholdState = (
     id: string | null,
     name: string | null,
     onboarding: boolean,
-    persistRef = true
+    persistRef = true,
+    cacheUserId?: string | null
   ) => {
     setHouseholdId(id)
     setHouseholdName(name)
     setNeedsOnboarding(onboarding)
     if (persistRef) {
       lastHouseholdRef.current = { id, name }
+      const ownerId = cacheUserId ?? user?.id ?? cachedHouseholdRef.current?.userId ?? null
+      if (ownerId) {
+        cachedHouseholdRef.current = { userId: ownerId, id, name }
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              HOUSEHOLD_CACHE_KEY,
+              JSON.stringify({ userId: ownerId, id, name })
+            )
+          } catch (err) {
+            console.warn('⚠️ Failed to write cached household:', err)
+          }
+        }
+      }
     }
     setLoading(false)
   }
@@ -72,6 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const surfaceCachedHousehold = (userId: string) => {
+    const cached = cachedHouseholdRef.current
+    if (!cached || cached.userId !== userId) return
+    // Show cached household immediately without persisting ref (already cached)
+    applyHouseholdState(cached.id, cached.name, false, false, userId)
+  }
+
   useEffect(() => {
     lastHouseholdRef.current = {
       id: householdId,
@@ -87,8 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let isActive = true
 
+    const client = supabase
+
     // Get initial session
-    supabase.auth.getSession()
+    client.auth.getSession()
       .then(({ data: { session } }) => {
         if (!isActive) return
 
@@ -98,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           console.log('👤 User authenticated:', session.user.email)
+          surfaceCachedHousehold(session.user.id)
           fetchHousehold(session.user.id)
         } else {
           console.log('👤 No authenticated user')
@@ -111,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = client.auth.onAuthStateChange(
       async (event, session) => {
         if (!isActive) return
 
@@ -120,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Handle sign-in events with extra logging
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('✅ User signed in successfully:', session.user.email)
+          surfaceCachedHousehold(session.user.id)
         }
         
         // Handle sign-out events
@@ -141,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     )
-
+    
     return () => {
       isActive = false
       subscription.unsubscribe()
@@ -153,87 +206,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
-    
-    try {
-      console.log(`🔍 Fetching household for user: ${userId}`)
-      const memberPromise = supabase
-        .from('household_members')
-        .select('household_id')
-        .eq('user_id', userId)
-        .maybeSingle()
 
-      const { data: memberData, error: memberError } = await withTimeout<{
-        data: { household_id: string | null } | null
-        error: unknown
-      }>(
-        Promise.resolve(memberPromise) as Promise<{
-          data: { household_id: string | null } | null
-          error: unknown
-        }>,
-        5000,
-        'household_members'
-      )
+    if (householdFetchRef.current) {
+      return householdFetchRef.current
+    }
 
-      if (memberError) {
-        const memberErrorMessage =
-          typeof memberError === 'object' &&
-          memberError !== null &&
-          'message' in memberError
-            ? String((memberError as { message?: unknown }).message ?? 'unknown error')
-            : 'unknown error'
-        fallbackToLastHousehold(`⚠️ Unable to load household membership: ${memberErrorMessage}`)
-        return
-      }
+    const client = supabase
 
-      if (!memberData?.household_id) {
-        console.log('ℹ️ No household found, showing onboarding flow')
-        applyHouseholdState(null, null, true)
-        return
-      }
+    const run = async () => {
+      try {
+        console.log(`🔍 Fetching household for user: ${userId}`)
+        const memberController = new AbortController()
+        const memberPromise = client
+          .from('household_members')
+          .select('household_id')
+          .eq('user_id', userId)
+          .abortSignal(memberController.signal)
+          .maybeSingle()
 
-      const householdId = memberData.household_id
-      console.log('✅ Found household ID:', householdId)
-      
-      const householdPromise = supabase
-        .from('households')
-        .select('id, name')
-        .eq('id', householdId)
-        .single()
-
-      const { data: householdData, error: householdError } = await withTimeout<{
-        data: { id: string; name: string | null } | null
-        error: unknown
-      }>(
-        Promise.resolve(householdPromise) as Promise<{
-          data: { id: string; name: string | null } | null
-          error: unknown
-        }>,
-        5000,
-        'households'
-      )
-
-      if (householdError || !householdData) {
-        console.warn('⚠️ Household details not found, using fallback')
-        const fallbackName = householdData?.name
-          ?? lastHouseholdRef.current.name
-          ?? 'My Household'
-        applyHouseholdState(householdId, fallbackName, false)
-        return
-      }
-
-      console.log('✅ Household loaded:', householdData.name)
-      applyHouseholdState(householdData.id, householdData.name, false)
-      
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith(TIMEOUT_ERROR_PREFIX)) {
-        fallbackToLastHousehold(
-          `⏱️ Timed out loading ${error.message.replace(TIMEOUT_ERROR_PREFIX, '')}`
+        const { data: memberData, error: memberError } = await withTimeout(
+          memberPromise as unknown as Promise<{
+            data: { household_id: string | null } | null
+            error: unknown
+          }>,
+          5000,
+          'household_members',
+          () => memberController.abort()
         )
-      } else {
-        console.error('💥 Error in fetchHousehold:', error)
-        fallbackToLastHousehold('🚨 Error occurred while loading household')
+
+        if (memberError) {
+          const memberErrorMessage =
+            typeof memberError === 'object' &&
+            memberError !== null &&
+            'message' in memberError
+              ? String((memberError as { message?: unknown }).message ?? 'unknown error')
+              : 'unknown error'
+          fallbackToLastHousehold(`⚠️ Unable to load household membership: ${memberErrorMessage}`)
+          return
+        }
+
+        if (!memberData?.household_id) {
+          console.log('ℹ️ No household found, showing onboarding flow')
+          applyHouseholdState(null, null, true, true, userId)
+          return
+        }
+
+        const householdId = memberData.household_id
+        console.log('✅ Found household ID:', householdId)
+        
+        const householdController = new AbortController()
+        const householdPromise = client
+          .from('households')
+          .select('id, name')
+          .eq('id', householdId)
+          .abortSignal(householdController.signal)
+          .single()
+
+        const { data: householdData, error: householdError } = await withTimeout(
+          householdPromise as unknown as Promise<{
+            data: { id: string; name: string | null } | null
+            error: unknown
+          }>,
+          5000,
+          'households',
+          () => householdController.abort()
+        )
+
+        if (householdError || !householdData) {
+          console.warn('⚠️ Household details not found, using fallback')
+          const fallbackName = householdData?.name
+            ?? lastHouseholdRef.current.name
+            ?? 'My Household'
+          applyHouseholdState(householdId, fallbackName, false, true, userId)
+          return
+        }
+
+        console.log('✅ Household loaded:', householdData.name)
+        applyHouseholdState(householdData.id, householdData.name, false, true, userId)
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith(TIMEOUT_ERROR_PREFIX)) {
+          fallbackToLastHousehold(
+            `⏱️ Timed out loading ${error.message.replace(TIMEOUT_ERROR_PREFIX, '')}`
+          )
+        } else {
+          console.error('💥 Error in fetchHousehold:', error)
+          fallbackToLastHousehold('🚨 Error occurred while loading household')
+        }
+      } finally {
+        householdFetchRef.current = null
       }
     }
+
+    const promise = run()
+    householdFetchRef.current = promise
+    return promise
   }
 
 
@@ -284,6 +350,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setHouseholdName(null)
       lastHouseholdRef.current = { id: null, name: null }
       setNeedsOnboarding(false)
+      cachedHouseholdRef.current = null
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(HOUSEHOLD_CACHE_KEY)
+        } catch (err) {
+          console.warn('⚠️ Failed to clear cached household:', err)
+        }
+      }
     } catch (error) {
       console.error('Sign out error:', error)
       throw error
