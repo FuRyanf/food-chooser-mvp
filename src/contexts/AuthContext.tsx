@@ -215,23 +215,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const run = async () => {
       try {
         console.log(`🔍 Fetching household for user: ${userId}`)
-        const memberController = new AbortController()
-        const memberPromise = client
-          .from('household_members')
-          .select('household_id')
-          .eq('user_id', userId)
-          .abortSignal(memberController.signal)
-          .maybeSingle()
-
-        const { data: memberData, error: memberError } = await withTimeout(
-          memberPromise as unknown as Promise<{
-            data: { household_id: string | null } | null
+        const memberResponse = await withTimeout(
+          client.rpc('get_user_household_id') as unknown as Promise<{
+            data: string | null
             error: unknown
           }>,
           5000,
-          'household_members',
-          () => memberController.abort()
+          'get_user_household_id',
+          undefined
         )
+
+        const { data: householdId, error: memberError } = memberResponse
 
         if (memberError) {
           const memberErrorMessage =
@@ -244,32 +238,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        if (!memberData?.household_id) {
+        if (!householdId) {
           console.log('ℹ️ No household found, showing onboarding flow')
           applyHouseholdState(null, null, true, true, userId)
           return
         }
 
-        const householdId = memberData.household_id
         console.log('✅ Found household ID:', householdId)
         
-        const householdController = new AbortController()
-        const householdPromise = client
-          .from('households')
-          .select('id, name')
-          .eq('id', householdId)
-          .abortSignal(householdController.signal)
-          .single()
+        const cached = cachedHouseholdRef.current
+        if (cached && cached.id === householdId && cached.name) {
+          console.log('🗂️ Using cached household name:', cached.name)
+          applyHouseholdState(householdId, cached.name, false, true, userId)
+          return
+        }
 
-        const { data: householdData, error: householdError } = await withTimeout(
-          householdPromise as unknown as Promise<{
-            data: { id: string; name: string | null } | null
-            error: unknown
-          }>,
+        const householdController = new AbortController()
+        const householdResponse = await withTimeout(
+          client
+            .from('households')
+            .select('id, name')
+            .eq('id', householdId)
+            .abortSignal(householdController.signal)
+            .single() as unknown as Promise<{
+              data: { id: string; name: string | null } | null
+              error: unknown
+            }>,
           5000,
           'households',
           () => householdController.abort()
         )
+
+        const { data: householdData, error: householdError } = householdResponse
 
         if (householdError || !householdData) {
           console.warn('⚠️ Household details not found, using fallback')

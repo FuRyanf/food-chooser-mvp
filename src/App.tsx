@@ -162,14 +162,19 @@ async function fetchWeather(lat:number, lon:number): Promise<Weather>{
 }
 async function reverseGeocode(lat:number, lon:number): Promise<string | null> {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=en&format=json`;
+    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
     const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('Reverse geocode API returned non-OK status:', res.status);
+      throw new Error('Reverse geocode failed');
+    }
     const data = await res.json();
-    const first = data?.results?.[0];
-    if (!first) return null;
-    // Prefer just the city/locality name
-    return first.name || null;
-  } catch { return null; }
+    const locality = data?.city || data?.locality || data?.principalSubdivision;
+    return locality ?? null;
+  } catch (err) {
+    console.warn('Reverse geocode unavailable, falling back to IP geolocation', err);
+    return null;
+  }
 }
 async function ipCityFallback(): Promise<string | null> {
   try {
