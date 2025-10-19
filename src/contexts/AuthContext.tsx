@@ -234,15 +234,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    if (householdFetchRef.current) {
-      return householdFetchRef.current
-    }
-
     const allowStale = options.allowStale ?? false
-
     const client = supabase
 
-    const run = async () => {
+    const run = async (handleErrors: boolean) => {
       try {
         console.log(`🔍 Fetching household for user: ${userId}`)
         const memberResponse = await withRetry(
@@ -262,7 +257,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'message' in memberError
               ? String((memberError as { message?: unknown }).message ?? 'unknown error')
               : 'unknown error'
-          fallbackToLastHousehold(`⚠️ Unable to load household membership: ${memberErrorMessage}`)
+          if (handleErrors) {
+            fallbackToLastHousehold(`⚠️ Unable to load household membership: ${memberErrorMessage}`)
+          } else {
+            console.debug('👟 Background household membership refresh failed:', memberErrorMessage)
+          }
           return
         }
 
@@ -278,9 +277,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cached && cached.id === householdId && cached.name) {
           console.log('🗂️ Using cached household name:', cached.name)
           applyHouseholdState(householdId, cached.name, false, true, userId)
-          if (!allowStale) {
-            return
-          }
         }
 
         const householdController = new AbortController()
@@ -302,17 +298,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: householdData, error: householdError } = householdResponse
 
         if (householdError || !householdData) {
-          console.warn('⚠️ Household details not found, using fallback')
           const fallbackName = householdData?.name
             ?? lastHouseholdRef.current.name
             ?? 'My Household'
-          applyHouseholdState(householdId, fallbackName, false, true, userId)
+          if (handleErrors) {
+            console.warn('⚠️ Household details not found, using fallback')
+            applyHouseholdState(householdId, fallbackName, false, true, userId)
+          } else {
+            console.debug('👟 Background household details refresh failed, keeping cached name')
+          }
           return
         }
 
         console.log('✅ Household loaded:', householdData.name)
         applyHouseholdState(householdData.id, householdData.name, false, true, userId)
       } catch (error) {
+        if (!handleErrors) {
+          console.debug('👟 Background household refresh failed (using cached values):', error)
+          return
+        }
+
         if (error instanceof Error && error.message.startsWith(TIMEOUT_ERROR_PREFIX)) {
           fallbackToLastHousehold(
             `⏱️ Timed out loading ${error.message.replace(TIMEOUT_ERROR_PREFIX, '')}`
@@ -321,14 +326,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('💥 Error in fetchHousehold:', error)
           fallbackToLastHousehold('🚨 Error occurred while loading household')
         }
-      } finally {
-        householdFetchRef.current = null
       }
     }
 
-    const promise = run()
-    householdFetchRef.current = promise
-    return promise
+    const startFetch = (handleErrors: boolean) => {
+      const promise = run(handleErrors)
+      householdFetchRef.current = promise
+      promise.finally(() => {
+        if (householdFetchRef.current === promise) {
+          householdFetchRef.current = null
+        }
+      })
+      return promise
+    }
+
+    if (allowStale) {
+      const cached = cachedHouseholdRef.current
+      if (cached && cached.userId === userId && cached.id) {
+        applyHouseholdState(cached.id, cached.name ?? 'My Household', false, true, userId)
+        if (!householdFetchRef.current) {
+          startFetch(false)
+        }
+        return
+      }
+    }
+
+    if (householdFetchRef.current) {
+      return householdFetchRef.current
+    }
+
+    return startFetch(true)
   }
 
 
