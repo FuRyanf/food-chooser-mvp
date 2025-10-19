@@ -19,6 +19,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const TIMEOUT_ERROR_PREFIX = 'timeout:'
 const HOUSEHOLD_CACHE_KEY = 'fudi.household.cache.v1'
 
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -37,6 +39,32 @@ async function withTimeout<T>(
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
   }
+}
+
+async function withRetry<T>(
+  makeRequest: () => Promise<T>,
+  options: { label: string; timeoutMs: number; retries?: number; delayMs?: number }
+): Promise<T> {
+  const { label, timeoutMs, retries = 0, delayMs = 300 } = options
+  let attempt = 0
+  let lastError: unknown = null
+
+  while (attempt <= retries) {
+    try {
+      return await withTimeout(makeRequest(), timeoutMs, label)
+    } catch (error) {
+      lastError = error
+      attempt += 1
+      if (attempt > retries) break
+      console.warn(`Retrying ${label} (${attempt}/${retries}) after error:`, error)
+      if (delayMs > 0) {
+        await wait(delayMs)
+      }
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError
+  throw new Error(`Failed ${label}`)
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -146,11 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
 
-        if (session?.user) {
-          console.log('👤 User authenticated:', session.user.email)
-          surfaceCachedHousehold(session.user.id)
-          fetchHousehold(session.user.id)
-        } else {
+    if (session?.user) {
+      console.log('👤 User authenticated:', session.user.email)
+      surfaceCachedHousehold(session.user.id)
+      fetchHousehold(session.user.id, { allowStale: true })
+    } else {
           console.log('👤 No authenticated user')
           setLoading(false)
         }
@@ -183,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null)
         
         if (session?.user) {
-          await fetchHousehold(session.user.id)
+          await fetchHousehold(session.user.id, { allowStale: true })
         } else {
           setHouseholdId(null)
           setHouseholdName(null)
@@ -200,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const fetchHousehold = async (userId: string) => {
+  const fetchHousehold = async (userId: string, options: { allowStale?: boolean } = {}) => {
     if (!supabase) {
       setLoading(false)
       return
@@ -210,19 +238,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return householdFetchRef.current
     }
 
+    const allowStale = options.allowStale ?? false
+
     const client = supabase
 
     const run = async () => {
       try {
         console.log(`🔍 Fetching household for user: ${userId}`)
-        const memberResponse = await withTimeout(
-          client.rpc('get_user_household_id') as unknown as Promise<{
+        const memberResponse = await withRetry(
+          () => client.rpc('get_user_household_id') as unknown as Promise<{
             data: string | null
             error: unknown
           }>,
-          5000,
-          'get_user_household_id',
-          undefined
+          { label: 'get_user_household_id', timeoutMs: 8000, retries: 1, delayMs: 500 }
         )
 
         const { data: householdId, error: memberError } = memberResponse
@@ -250,7 +278,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cached && cached.id === householdId && cached.name) {
           console.log('🗂️ Using cached household name:', cached.name)
           applyHouseholdState(householdId, cached.name, false, true, userId)
-          return
+          if (!allowStale) {
+            return
+          }
         }
 
         const householdController = new AbortController()
