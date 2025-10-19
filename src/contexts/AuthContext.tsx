@@ -29,7 +29,6 @@ async function withTimeout<T>(
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       onTimeout?.()
-      promise.catch(() => {})
       reject(new Error(`${TIMEOUT_ERROR_PREFIX}${label}`))
     }, timeoutMs)
   })
