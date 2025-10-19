@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
@@ -23,44 +23,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [householdName, setHouseholdName] = useState<string | null>(null)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [loading, setLoading] = useState(true)
+  const lastHouseholdRef = useRef<{ id: string | null; name: string | null }>({
+    id: null,
+    name: null
+  })
+
+  useEffect(() => {
+    lastHouseholdRef.current = {
+      id: householdId,
+      name: householdName
+    }
+  }, [householdId, householdName])
 
   useEffect(() => {
     if (!supabase) {
       setLoading(false)
       return
     }
-    
-    // Add timeout to prevent infinite loading (reduced to 3 seconds)
-    const timeoutId = setTimeout(() => {
-      console.error('⏱️ Auth loading timeout after 3s - showing onboarding')
-      setNeedsOnboarding(true)
-      setLoading(false)
-    }, 3000) // 3 second timeout
-    
+
+    let isActive = true
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔐 Initial session check:', session ? 'Found' : 'Not found')
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        console.log('👤 User authenticated:', session.user.email)
-        fetchHousehold(session.user.id).finally(() => {
-          clearTimeout(timeoutId)
-        })
-      } else {
-        console.log('👤 No authenticated user')
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!isActive) return
+
+        console.log('🔐 Initial session check:', session ? 'Found' : 'Not found')
+        setSession(session)
+        setUser(session?.user ?? null)
+
+        if (session?.user) {
+          console.log('👤 User authenticated:', session.user.email)
+          fetchHousehold(session.user.id)
+        } else {
+          console.log('👤 No authenticated user')
+          setLoading(false)
+        }
+      })
+      .catch((error) => {
+        if (!isActive) return
+        console.error('❌ Error getting session:', error)
         setLoading(false)
-        clearTimeout(timeoutId)
-      }
-    }).catch((error) => {
-      console.error('❌ Error getting session:', error)
-      setLoading(false)
-      clearTimeout(timeoutId)
-    })
+      })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isActive) return
+
         console.log('🔄 Auth state changed:', event, session?.user?.email ?? 'No user')
         
         // Handle sign-in events with extra logging
@@ -81,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setHouseholdId(null)
           setHouseholdName(null)
+          lastHouseholdRef.current = { id: null, name: null }
           setNeedsOnboarding(false)
           setLoading(false)
         }
@@ -88,8 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => {
+      isActive = false
       subscription.unsubscribe()
-      clearTimeout(timeoutId)
     }
   }, [])
 
@@ -101,31 +112,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log(`🔍 Fetching household for user: ${userId}`)
-      
-      // Race the query against a 2-second timeout
-      const queryPromise = supabase
+      const { data: memberData, error: memberError } = await supabase
         .from('household_members')
         .select('household_id')
         .eq('user_id', userId)
         .maybeSingle()
-      
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout')), 2000)
-      )
-      
-      const { data: memberData, error: memberError } = await Promise.race([
-        queryPromise,
-        timeoutPromise
-      ]).catch(err => {
-        console.warn('⏱️ Query timed out or failed:', err.message)
-        return { data: null, error: err }
-      })
-      
-      // If query fails or no household found, show onboarding
-      if (memberError || !memberData?.household_id) {
+
+      if (memberError) {
+        console.warn('⚠️ Unable to load household membership:', memberError)
+        if (lastHouseholdRef.current.id) {
+          console.log('➡️ Retaining last known household due to transient error')
+          setNeedsOnboarding(false)
+        } else {
+          setHouseholdId(null)
+          setHouseholdName(null)
+          lastHouseholdRef.current = { id: null, name: null }
+          setNeedsOnboarding(true)
+        }
+        setLoading(false)
+        return
+      }
+
+      if (!memberData?.household_id) {
         console.log('ℹ️ No household found, showing onboarding flow')
         setHouseholdId(null)
         setHouseholdName(null)
+        lastHouseholdRef.current = { id: null, name: null }
         setNeedsOnboarding(true)
         setLoading(false)
         return
@@ -134,30 +146,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const householdId = memberData.household_id
       console.log('✅ Found household ID:', householdId)
       
-      // Fetch household details with timeout
-      const householdQueryPromise = supabase
+      const { data: householdData, error: householdError } = await supabase
         .from('households')
         .select('id, name')
         .eq('id', householdId)
         .single()
-      
-      const householdTimeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Household query timeout')), 2000)
-      )
-      
-      const { data: householdData, error: householdError } = await Promise.race([
-        householdQueryPromise,
-        householdTimeoutPromise
-      ]).catch(err => {
-        console.warn('⏱️ Household query timed out or failed:', err.message)
-        return { data: null, error: err }
-      })
 
       if (householdError || !householdData) {
-        console.warn('⚠️ Household details not found, using defaults')
-        // Still set the household ID so app works
+        console.warn('⚠️ Household details not found, using fallback')
+        const fallbackName = lastHouseholdRef.current.name ?? 'My Household'
         setHouseholdId(householdId)
-        setHouseholdName('My Household')
+        setHouseholdName(fallbackName)
+        lastHouseholdRef.current = { id: householdId, name: fallbackName }
         setNeedsOnboarding(false)
         setLoading(false)
         return
@@ -166,16 +166,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('✅ Household loaded:', householdData.name)
       setHouseholdId(householdData.id)
       setHouseholdName(householdData.name)
+      lastHouseholdRef.current = { id: householdData.id, name: householdData.name }
       setNeedsOnboarding(false)
       setLoading(false)
       
     } catch (error) {
       console.error('💥 Error in fetchHousehold:', error)
-      // On any error, show onboarding
-      console.log('🚨 Error occurred, showing onboarding flow')
-      setHouseholdId(null)
-      setHouseholdName(null)
-      setNeedsOnboarding(true)
+      if (lastHouseholdRef.current.id) {
+        console.log('➡️ Keeping last known household after error')
+        setNeedsOnboarding(false)
+      } else {
+        setHouseholdId(null)
+        setHouseholdName(null)
+        lastHouseholdRef.current = { id: null, name: null }
+        setNeedsOnboarding(true)
+      }
       setLoading(false)
     }
   }
@@ -226,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setHouseholdId(null)
       setHouseholdName(null)
+      lastHouseholdRef.current = { id: null, name: null }
+      setNeedsOnboarding(false)
     } catch (error) {
       console.error('Sign out error:', error)
       throw error
@@ -258,4 +265,3 @@ export const useAuth = () => {
   }
   return context
 }
-
